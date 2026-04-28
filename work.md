@@ -21,3 +21,5 @@
 ☐ Дописать промпты (nutrition_prompt.txt, plan_template.txt)
 
 
+
+

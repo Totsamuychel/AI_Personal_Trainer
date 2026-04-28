@@ -5,7 +5,7 @@ import json
 
 @tool
 def calculate_macros_from_text(description: str) -> str:
-    """Считает КБЖУ по текстовому описанию еды."""
+    """Calculates macronutrients based on a textual description of food."""
     llm = get_llm()
     prompt = PromptTemplate.from_template(
         "Ты диетолог. Посчитай КБЖУ для следующего приема пищи: {description}. "
@@ -20,6 +20,6 @@ def calculate_macros_from_text(description: str) -> str:
 
 @tool
 def log_nutrition_tool(telegram_id: str, meal_description: str, macros_json: str) -> str:
-    """Записывает данные о питании в БД."""
+    """Records nutrition data in the DB."""
     # Logic to save to PostgreSQL
     return f"Запись о питании '{meal_description}' сохранена."

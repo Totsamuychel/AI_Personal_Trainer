@@ -20,7 +20,7 @@ class FitnessKnowledgeBase:
         )
 
     def load_exercises_from_json(self, json_path: str):
-        """Загружает базу упражнений из JSON файла."""
+        """Loads the exercise database from a JSON file."""
         with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
@@ -40,8 +40,8 @@ class FitnessKnowledgeBase:
             ))
         
         self.vectorstore.add_documents(docs)
-        print(f"Загружено {len(docs)} упражнений из {json_path}")
+        print(f"Loaded {len(docs)} exercises from {json_path}")
 
     def search(self, query: str, k: int = 3):
-        """Семантический поиск по базе знаний."""
+        """Semantic search in the knowledge base."""
         return self.vectorstore.similarity_search(query, k=k)

@@ -13,10 +13,10 @@ class GoalType(enum.Enum):
     endurance   = "endurance"
 
 class WeekType(enum.Enum):
-    strength    = "strength"     # 4-6 повторов, 85-90% 1RM
-    hypertrophy = "hypertrophy"  # 8-12 повторов, 70-75% 1RM
-    volume      = "volume"       # 12-15 повторов, 60-65% 1RM
-    deload      = "deload"       # 10-12 повторов, 50% 1RM
+    strength    = "strength"     # 4-6 reps, 85-90% 1RM
+    hypertrophy = "hypertrophy"  # 8-12 reps, 70-75% 1RM
+    volume      = "volume"       # 12-15 reps, 60-65% 1RM
+    deload      = "deload"       # 10-12 reps, 50% 1RM
 
 class User(Base):
     __tablename__ = "users"
@@ -29,7 +29,7 @@ class User(Base):
     goal            = Column(Enum(GoalType))
     level           = Column(String)           # beginner / intermediate / advanced
     preferred_split = Column(String)           # PPL / Upper-Lower / Full Body
-    injuries        = Column(JSON, default=list) # ["боль в колене", ...]
+    injuries        = Column(JSON, default=list) # ["knee pain", ...]
     created_at      = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     workouts        = relationship("WorkoutSession", back_populates="user")
@@ -55,8 +55,8 @@ class ExerciseLog(Base):
     session_id = Column(Integer, ForeignKey("workout_sessions.id"))
     name       = Column(String)
     sets       = Column(Integer)
-    reps       = Column(JSON)   # [5, 5, 4] — повторы в каждом подходе
-    weight_kg  = Column(JSON)   # [80, 80, 77.5] — вес в каждом подходе
+    reps       = Column(JSON)   # [5, 5, 4] — reps in each set
+    weight_kg  = Column(JSON)   # [80, 80, 77.5] — weight in each set
     rpe        = Column(Float)  # Rate of Perceived Exertion (1-10)
     notes      = Column(String)
     
@@ -69,7 +69,7 @@ class PersonalRecord(Base):
     exercise    = Column(String)
     weight_kg   = Column(Float)
     reps        = Column(Integer)
-    one_rm_est  = Column(Float)  # Расчётный 1RM по формуле Epley
+    one_rm_est  = Column(Float)  # Estimated 1RM using Epley formula
     date        = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class WeeklyPlan(Base):
@@ -79,7 +79,7 @@ class WeeklyPlan(Base):
     week_number = Column(Integer)
     week_type   = Column(Enum(WeekType))
     start_date  = Column(DateTime)
-    plan_data   = Column(JSON)   # Полный план в JSON
+    plan_data   = Column(JSON)   # Full plan in JSON
     is_active   = Column(Integer, default=1)
     
     user        = relationship("User", back_populates="plans")
@@ -90,7 +90,7 @@ class NutritionLog(Base):
     user_id      = Column(Integer, ForeignKey("users.id"))
     date         = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     meal_name    = Column(String)
-    description  = Column(String)      # Исходный текст пользователя
+    description  = Column(String)      # Original user text
     calories     = Column(Float)
     protein_g    = Column(Float)
     carbs_g      = Column(Float)

@@ -38,7 +38,7 @@ class SheetsClient:
             return None
 
     def log_workout(self, user_name: str, session_data: dict):
-        """Записывает тренировку на лист '📈 Прогресс нагрузок'."""
+        """Records a workout on the '📈 Прогресс нагрузок' sheet."""
         try:
             ss = self.get_spreadsheet()
             if not ss: return
@@ -72,7 +72,7 @@ class SheetsClient:
             logger.error(f"Error logging workout to sheets: {e}")
 
     def log_nutrition(self, user_name: str, meal_data: dict):
-        """Записывает питание на лист '🥗 Питание'."""
+        """Records nutrition on the '🥗 Питание' sheet."""
         try:
             ss = self.get_spreadsheet()
             if not ss: return
@@ -95,7 +95,7 @@ class SheetsClient:
             logger.error(f"Error logging nutrition to sheets: {e}")
 
     def update_profile(self, profile_data: dict):
-        """Обновляет лист '📋 Профиль'."""
+        """Updates the '📋 Профиль' sheet."""
         try:
             ss = self.get_spreadsheet()
             if not ss: return

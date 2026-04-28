@@ -19,6 +19,7 @@ class AgentState(TypedDict):
     action_type: str  # workout_log / nutrition_log / plan_gen / tip / analysis
 
 def get_llm():
+    """Retrieve the LLM based on environment configuration."""
     provider = os.getenv("LLM_PROVIDER", "ollama")
     if provider == "openai":
         return ChatOpenAI(model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
@@ -29,6 +30,7 @@ def get_llm():
         )
 
 def load_user_profile_node(state: AgentState):
+    """Load user profile, personal records, and workout history from the database."""
     logger.info(f"Loading real profile for user {state['user_id']}")
     
     with database.db_session() as db:
@@ -75,6 +77,7 @@ def load_user_profile_node(state: AgentState):
         }
 
 def run_agent_node(state: AgentState):
+    """Construct system message with user profile and invoke the LLM."""
     llm = get_llm()
     
     # Construct system message with user profile
@@ -100,6 +103,7 @@ def run_agent_node(state: AgentState):
     return {"messages": [response]}
 
 def build_trainer_graph():
+    """Build and compile the LangGraph workflow for the trainer agent."""
     workflow = StateGraph(AgentState)
 
     workflow.add_node("load_profile", load_user_profile_node)

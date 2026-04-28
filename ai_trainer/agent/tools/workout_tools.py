@@ -11,8 +11,8 @@ def log_workout_session_tool(
     notes: str = ""
 ) -> str:
     """
-    Записывает тренировку в базу данных.
-    exercises должен быть списком словарей: [{"name": "Жим лёжа", "sets": 4, "reps": [5,5,5,4], "weight_kg": [80,80,80,80]}]
+    Records a workout in the database.
+    exercises should be a list of dictionaries: [{"name": "Bench Press", "sets": 4, "reps": [5,5,5,4], "weight_kg": [80,80,80,80]}]
     """
     try:
         with database.db_session() as db:
@@ -28,10 +28,10 @@ def log_workout_session_tool(
             
             session = crud.create_workout_session(db, user.id, workout_data, exercises)
             
-            # Обновляем рекорды
+            # Update records
             for ex in exercises:
                 max_weight = max(ex.get('weight_kg', [0]))
-                # Берем минимальное кол-во повторов с этим весом для консервативной оценки 1RM
+                # Use the minimum number of reps with this weight for a conservative 1RM estimate
                 reps = ex.get('reps', [0])[0] 
                 crud.update_personal_record(db, user.id, ex['name'], max_weight, reps)
             
@@ -41,7 +41,7 @@ def log_workout_session_tool(
 
 @tool
 def get_workout_history_tool(telegram_id: str, last_n: int = 5) -> str:
-    """Возвращает историю последних тренировок пользователя."""
+    """Returns the user's recent workout history."""
     try:
         with database.db_session() as db:
             user = crud.get_user_by_telegram_id(db, telegram_id)
