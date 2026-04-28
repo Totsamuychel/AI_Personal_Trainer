@@ -1,4 +1,5 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
 from . import models
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -16,26 +17,27 @@ def calculate_1rm(weight: float, reps: int) -> float:
     return res
 
 # User operations
-def get_user_by_telegram_id(db: Session, telegram_id: str) -> Optional[models.User]:
+async def get_user_by_telegram_id(db: AsyncSession, telegram_id: str) -> Optional[models.User]:
     logger.debug(f"Fetching user by Telegram ID: {telegram_id}")
-    return db.query(models.User).filter(models.User.telegram_id == str(telegram_id)).first()
+    result = await db.execute(select(models.User).filter(models.User.telegram_id == str(telegram_id)))
+    return result.scalars().first()
 
-def create_user(db: Session, user_data: dict) -> models.User:
+async def create_user(db: AsyncSession, user_data: dict) -> models.User:
     logger.info(f"Creating new user with telegram_id: {user_data.get('telegram_id')}")
     db_user = models.User(**user_data)
     db.add(db_user)
     try:
-        db.commit()
-        db.refresh(db_user)
+        await db.commit()
+        await db.refresh(db_user)
         logger.success(f"User created successfully: ID {db_user.id}")
     except Exception as e:
         logger.error(f"Failed to create user: {e}")
-        db.rollback()
+        await db.rollback()
         raise
     return db_user
 
 # Workout operations
-def create_workout_session(db: Session, user_id: int, workout_data: dict, exercises: List[dict]) -> models.WorkoutSession:
+async def create_workout_session(db: AsyncSession, user_id: int, workout_data: dict, exercises: List[dict]) -> models.WorkoutSession:
     logger.info(f"Creating workout session for user_id: {user_id}, type: {workout_data.get('workout_type')}")
     db_session = models.WorkoutSession(
         user_id=user_id,
@@ -49,7 +51,7 @@ def create_workout_session(db: Session, user_id: int, workout_data: dict, exerci
     
     try:
         # We need to flush to get db_session.id
-        db.flush()
+        await db.flush()
         logger.debug(f"Workout session flushed, ID: {db_session.id}")
         
         for ex in exercises:
@@ -65,31 +67,38 @@ def create_workout_session(db: Session, user_id: int, workout_data: dict, exerci
             )
             db.add(db_ex)
         
-        db.commit()
-        db.refresh(db_session)
+        await db.commit()
+        await db.refresh(db_session)
         logger.success(f"Workout session {db_session.id} created with {len(exercises)} exercises")
     except Exception as e:
         logger.error(f"Failed to create workout session: {e}")
-        db.rollback()
+        await db.rollback()
         raise
     
     return db_session
 
-def get_workout_history(db: Session, user_id: int, limit: int = 10) -> List[models.WorkoutSession]:
+async def get_workout_history(db: AsyncSession, user_id: int, limit: int = 10) -> List[models.WorkoutSession]:
     logger.debug(f"Fetching workout history for user_id {user_id}, limit {limit}")
-    return db.query(models.WorkoutSession).filter(
-        models.WorkoutSession.user_id == user_id
-    ).order_by(models.WorkoutSession.date.desc()).limit(limit).all()
+    result = await db.execute(
+        select(models.WorkoutSession)
+        .filter(models.WorkoutSession.user_id == user_id)
+        .order_by(models.WorkoutSession.date.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
 
 # Personal Record operations
-def update_personal_record(db: Session, user_id: int, exercise: str, weight: float, reps: int) -> models.PersonalRecord:
+async def update_personal_record(db: AsyncSession, user_id: int, exercise: str, weight: float, reps: int) -> models.PersonalRecord:
     one_rm = calculate_1rm(weight, reps)
     logger.debug(f"Checking PR for user {user_id}, exercise: {exercise}")
     
-    db_pr = db.query(models.PersonalRecord).filter(
-        models.PersonalRecord.user_id == user_id,
-        models.PersonalRecord.exercise == exercise
-    ).first()
+    result = await db.execute(
+        select(models.PersonalRecord).filter(
+            models.PersonalRecord.user_id == user_id,
+            models.PersonalRecord.exercise == exercise
+        )
+    )
+    db_pr = result.scalars().first()
     
     try:
         if not db_pr:
@@ -110,26 +119,26 @@ def update_personal_record(db: Session, user_id: int, exercise: str, weight: flo
             db_pr.one_rm_est = one_rm
             db_pr.date = datetime.now(timezone.utc)
         
-        db.commit()
+        await db.commit()
         if db_pr:
-            db.refresh(db_pr)
+            await db.refresh(db_pr)
     except Exception as e:
         logger.error(f"Failed to update personal record: {e}")
-        db.rollback()
+        await db.rollback()
         raise
     return db_pr
 
 # Nutrition operations
-def create_nutrition_log(db: Session, user_id: int, nutrition_data: dict) -> models.NutritionLog:
+async def create_nutrition_log(db: AsyncSession, user_id: int, nutrition_data: dict) -> models.NutritionLog:
     logger.info(f"Creating nutrition log for user_id: {user_id}, meal: {nutrition_data.get('meal_name')}")
     db_log = models.NutritionLog(user_id=user_id, **nutrition_data)
     db.add(db_log)
     try:
-        db.commit()
-        db.refresh(db_log)
+        await db.commit()
+        await db.refresh(db_log)
         logger.success(f"Nutrition log {db_log.id} created successfully")
     except Exception as e:
         logger.error(f"Failed to create nutrition log: {e}")
-        db.rollback()
+        await db.rollback()
         raise
     return db_log

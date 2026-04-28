@@ -7,6 +7,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, System
 from loguru import logger
 import os
 from ai_trainer.db import crud, database, models
+from sqlalchemy import select
 
 class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], operator.add]
@@ -29,12 +30,12 @@ def get_llm():
             base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         )
 
-def load_user_profile_node(state: AgentState):
+async def load_user_profile_node(state: AgentState):
     """Load user profile, personal records, and workout history from the database."""
     logger.info(f"Loading real profile for user {state['user_id']}")
     
-    with database.db_session() as db:
-        user = crud.get_user_by_telegram_id(db, state['user_id'])
+    async with database.db_session() as db:
+        user = await crud.get_user_by_telegram_id(db, state['user_id'])
         
         if not user:
             logger.warning(f"User {state['user_id']} not found in DB")
@@ -57,14 +58,15 @@ def load_user_profile_node(state: AgentState):
         }
         
         # Load PRs
-        prs = db.query(models.PersonalRecord).filter(models.PersonalRecord.user_id == user.id).all()
+        pr_result = await db.execute(select(models.PersonalRecord).filter(models.PersonalRecord.user_id == user.id))
+        prs = pr_result.scalars().all()
         pr_list = [
             {"exercise": pr.exercise, "weight": pr.weight_kg, "reps": pr.reps, "1rm": pr.one_rm_est}
             for pr in prs
         ]
         
         # Load recent workouts
-        history = crud.get_workout_history(db, user.id, limit=5)
+        history = await crud.get_workout_history(db, user.id, limit=5)
         workout_list = [
             {"date": w.date.isoformat(), "type": w.workout_type, "notes": w.notes}
             for w in history
@@ -76,7 +78,7 @@ def load_user_profile_node(state: AgentState):
             "recent_workouts": workout_list
         }
 
-def run_agent_node(state: AgentState):
+async def run_agent_node(state: AgentState):
     """Construct system message with user profile and invoke the LLM."""
     llm = get_llm()
     
@@ -99,7 +101,7 @@ def run_agent_node(state: AgentState):
     """
     
     messages = [SystemMessage(content=system_prompt)] + state['messages']
-    response = llm.invoke(messages)
+    response = await llm.ainvoke(messages)
     return {"messages": [response]}
 
 def build_trainer_graph():

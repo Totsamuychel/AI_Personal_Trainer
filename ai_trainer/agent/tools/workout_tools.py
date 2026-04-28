@@ -1,9 +1,10 @@
 from langchain.tools import tool
 from ai_trainer.db import crud, database
 from sqlalchemy.orm import Session
+from loguru import logger
 
 @tool
-def log_workout_session_tool(
+async def log_workout_session_tool(
     telegram_id: str,
     workout_type: str,
     exercises: list[dict],
@@ -12,13 +13,13 @@ def log_workout_session_tool(
 ) -> str:
     """
     Records a workout in the database.
-    exercises should be a list of dictionaries: [{"name": "Bench Press", "sets": 4, "reps": [5,5,5,4], "weight_kg": [80,80,80,80]}]
+    exercises should be a list of dicts: [{"name": "Bench Press", "sets": 4, "reps": [5,5,5,4], "weight_kg": [80,80,80,80]}]
     """
     try:
-        with database.db_session() as db:
-            user = crud.get_user_by_telegram_id(db, telegram_id)
+        async with database.db_session() as db:
+            user = await crud.get_user_by_telegram_id(db, telegram_id)
             if not user:
-                return "Ошибка: пользователь не найден."
+                return "Error: user not found."
             
             workout_data = {
                 "workout_type": workout_type,
@@ -26,37 +27,39 @@ def log_workout_session_tool(
                 "notes": notes
             }
             
-            session = crud.create_workout_session(db, user.id, workout_data, exercises)
+            session = await crud.create_workout_session(db, user.id, workout_data, exercises)
             
             # Update records
             for ex in exercises:
                 max_weight = max(ex.get('weight_kg', [0]))
-                # Use the minimum number of reps with this weight for a conservative 1RM estimate
+                # Use minimum reps with this weight for conservative 1RM estimation
                 reps = ex.get('reps', [0])[0] 
-                crud.update_personal_record(db, user.id, ex['name'], max_weight, reps)
+                await crud.update_personal_record(db, user.id, ex['name'], max_weight, reps)
             
-        return f"✅ Тренировка '{workout_type}' успешно записана! Выполнено {len(exercises)} упражнений."
+        return f"✅ Workout '{workout_type}' successfully recorded! {len(exercises)} exercises completed."
     except Exception as e:
-        return f"❌ Ошибка при записи тренировки: {str(e)}"
+        logger.error(f"Error in log_workout_session_tool: {e}")
+        return f"❌ Error recording workout: {str(e)}"
 
 @tool
-def get_workout_history_tool(telegram_id: str, last_n: int = 5) -> str:
+async def get_workout_history_tool(telegram_id: str, last_n: int = 5) -> str:
     """Returns the user's recent workout history."""
     try:
-        with database.db_session() as db:
-            user = crud.get_user_by_telegram_id(db, telegram_id)
+        async with database.db_session() as db:
+            user = await crud.get_user_by_telegram_id(db, telegram_id)
             if not user:
-                return "Пользователь не найден."
+                return "User not found."
             
-            history = crud.get_workout_history(db, user.id, last_n)
+            history = await crud.get_workout_history(db, user.id, last_n)
             if not history:
-                return "История тренировок пуста."
+                return "Workout history is empty."
             
-            res = "Последние тренировки:\n"
+            res = "Recent workouts:\n"
             for s in history:
-                res += f"- {s.date.strftime('%Y-%m-%d')}: {s.workout_type} ({s.duration_min} мин)\n"
+                res += f"- {s.date.strftime('%Y-%m-%d')}: {s.workout_type} ({s.duration_min} min)\n"
                 for ex in s.exercises:
-                    res += f"  • {ex.name}: {ex.sets} подходов, вес {ex.weight_kg} кг\n"
+                    res += f"  • {ex.name}: {ex.sets} sets, weight {ex.weight_kg} kg\n"
             return res
     except Exception as e:
-        return f"❌ Ошибка при получении истории: {str(e)}"
+        logger.error(f"Error in get_workout_history_tool: {e}")
+        return f"❌ Error retrieving history: {str(e)}"

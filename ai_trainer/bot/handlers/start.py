@@ -24,8 +24,8 @@ MIN_WEIGHT, MAX_WEIGHT = 30, 250
 async def cmd_start(message: types.Message, state: FSMContext):
     telegram_id = str(message.from_user.id)
     
-    with database.db_session() as db:
-        user = crud.get_user_by_telegram_id(db, telegram_id)
+    async with database.db_session() as db:
+        user = await crud.get_user_by_telegram_id(db, telegram_id)
     
     if user:
         await message.answer(f"Привет, {user.name}! С возвращением. Используй /workout чтобы начать тренировку.")
@@ -105,8 +105,8 @@ async def process_goal_callback(callback: types.CallbackQuery, state: FSMContext
     data['telegram_id'] = str(callback.from_user.id)
     
     try:
-        with database.db_session() as db:
-            crud.create_user(db, data)
+        async with database.db_session() as db:
+            await crud.create_user(db, data)
         
         goals_text = {
             "strength": "Сила",

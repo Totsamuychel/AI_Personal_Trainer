@@ -112,8 +112,8 @@ async def finish_workout(message: types.Message, state: FSMContext):
     telegram_id = str(message.from_user.id)
     
     try:
-        with database.db_session() as db:
-            user = crud.get_user_by_telegram_id(db, telegram_id)
+        async with database.db_session() as db:
+            user = await crud.get_user_by_telegram_id(db, telegram_id)
             
             if not user:
                 await message.answer("Ошибка: пользователь не найден.")
@@ -125,11 +125,11 @@ async def finish_workout(message: types.Message, state: FSMContext):
                 "duration_min": duration,
                 "notes": ""
             }
-            crud.create_workout_session(db, user.id, workout_data, data['exercises'])
+            await crud.create_workout_session(db, user.id, workout_data, data['exercises'])
             
             # Update PRs
             for ex in data['exercises']:
-                crud.update_personal_record(db, user.id, ex['name'], max(ex['weight_kg']), min(ex['reps']))
+                await crud.update_personal_record(db, user.id, ex['name'], max(ex['weight_kg']), min(ex['reps']))
                 
         await message.answer(f"✅ Тренировка ({duration} мин) сохранена! Отличная работа.")
     except Exception as e:

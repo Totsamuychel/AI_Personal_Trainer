@@ -1,23 +1,25 @@
 import pytest
 from ai_trainer.db import crud, models
 
-def test_create_user(db_session):
+@pytest.mark.asyncio
+async def test_create_user(db_session):
     user_data = {
         "telegram_id": "12345",
         "name": "Test User",
         "age": 25,
         "goal": models.GoalType.strength
     }
-    user = crud.create_user(db_session, user_data)
+    user = await crud.create_user(db_session, user_data)
     assert user.id is not None
     assert user.name == "Test User"
     
-    db_user = crud.get_user_by_telegram_id(db_session, "12345")
+    db_user = await crud.get_user_by_telegram_id(db_session, "12345")
     assert db_user.id == user.id
 
-def test_create_workout(db_session):
+@pytest.mark.asyncio
+async def test_create_workout(db_session):
     # Setup user
-    user = crud.create_user(db_session, {"telegram_id": "67890", "name": "Athlete"})
+    user = await crud.create_user(db_session, {"telegram_id": "67890", "name": "Athlete"})
     
     workout_data = {
         "workout_type": "Push",
@@ -32,13 +34,13 @@ def test_create_workout(db_session):
         }
     ]
     
-    session = crud.create_workout_session(db_session, user.id, workout_data, exercises)
+    session = await crud.create_workout_session(db_session, user.id, workout_data, exercises)
     assert session.id is not None
     assert len(session.exercises) == 1
     assert session.exercises[0].name == "Bench Press"
 
 def test_1rm_calculation():
-    # 100kg for 5 reps: 100 * (1 + 5/30) = 116.66
+    # 100kg for 5 reps: 100 * (1 + 5/30) = 116.666... -> 116.67
     rm = crud.calculate_1rm(100, 5)
     assert rm == 116.67
     
