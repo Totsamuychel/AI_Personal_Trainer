@@ -1,7 +1,8 @@
-from aiogram import Router, types
+from aiogram import Router, types, F
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from ai_trainer.db import crud, database
 from loguru import logger
 
@@ -58,33 +59,48 @@ async def process_weight(message: types.Message, state: FSMContext):
     try:
         weight = float(message.text)
         await state.update_data(weight_kg=weight)
-        await message.answer("Какая у тебя цель? (сила, гипертрофия, похудение)")
+        
+        builder = InlineKeyboardBuilder()
+        builder.button(text="💪 Сила", callback_data="goal_strength")
+        builder.button(text="🏗️ Гипертрофия", callback_data="goal_hypertrophy")
+        builder.button(text="📉 Похудение", callback_data="goal_fat_loss")
+        builder.adjust(1)
+        
+        await message.answer(
+            "Какая у тебя цель?",
+            reply_markup=builder.as_markup()
+        )
         await state.set_state(RegistrationStates.waiting_for_goal)
     except ValueError:
         await message.answer("Пожалуйста, введи число.")
 
-@router.message(RegistrationStates.waiting_for_goal)
-async def process_goal(message: types.Message, state: FSMContext):
-    goal_map = {
-        "сила": "strength",
-        "гипертрофия": "hypertrophy",
-        "похудение": "fat_loss"
-    }
-    user_goal = message.text.lower()
-    if user_goal not in goal_map:
-        await message.answer("Выбери из: сила, гипертрофия, похудение")
-        return
+@router.callback_query(RegistrationStates.waiting_for_goal, F.data.startswith("goal_"))
+async def process_goal_callback(callback: types.CallbackQuery, state: FSMContext):
+    goal = callback.data.split("_")[1]
     
     data = await state.get_data()
-    data['goal'] = goal_map[user_goal]
-    data['telegram_id'] = str(message.from_user.id)
+    data['goal'] = goal
+    data['telegram_id'] = str(callback.from_user.id)
     
     try:
         with database.db_session() as db:
             crud.create_user(db, data)
-        await message.answer("Отлично! Профиль создан. Теперь ты можешь использовать /workout для записи тренировок.")
+        
+        # Text for feedback
+        goals_text = {
+            "strength": "Сила",
+            "hypertrophy": "Гипертрофия",
+            "fat_loss": "Похудение"
+        }
+        
+        await callback.message.edit_text(f"Цель выбрана: {goals_text.get(goal)}\nОтлично! Профиль создан. Теперь ты можешь использовать /workout для записи тренировок.")
+        await callback.answer()
     except Exception as e:
         logger.error(f"Error creating user: {e}")
-        await message.answer("Произошла ошибка при создании профиля.")
+        await callback.message.answer("Произошла ошибка при создании профиля.")
     finally:
         await state.clear()
+
+@router.message(RegistrationStates.waiting_for_goal)
+async def process_goal_text(message: types.Message):
+    await message.answer("Пожалуйста, выбери цель, нажав на одну из кнопок выше.")
