@@ -31,10 +31,23 @@ async def log_workout_session_tool(
             
             # Update records
             for ex in exercises:
-                max_weight = max(ex.get('weight_kg', [0]))
-                # Use minimum reps with this weight for conservative 1RM estimation
-                reps = ex.get('reps', [0])[0] 
-                await crud.update_personal_record(db, user.id, ex['name'], max_weight, reps)
+                weights = ex.get('weight_kg', [])
+                reps_list = ex.get('reps', [])
+                
+                if not weights or not reps_list:
+                    continue
+                    
+                max_weight = max(weights)
+                
+                # Find the maximum reps performed with the maximum weight
+                max_reps_with_max_weight = 0
+                for w, r in zip(weights, reps_list):
+                    if w == max_weight:
+                        if r > max_reps_with_max_weight:
+                            max_reps_with_max_weight = r
+                
+                if max_weight > 0 and max_reps_with_max_weight > 0:
+                    await crud.update_personal_record(db, user.id, ex['name'], max_weight, max_reps_with_max_weight)
             
         return f"✅ Workout '{workout_type}' successfully recorded! {len(exercises)} exercises completed."
     except Exception as e:
