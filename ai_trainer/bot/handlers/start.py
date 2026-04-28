@@ -15,6 +15,11 @@ class RegistrationStates(StatesGroup):
     waiting_for_weight = State()
     waiting_for_goal = State()
 
+# Validation constants
+MIN_AGE, MAX_AGE = 12, 100
+MIN_HEIGHT, MAX_HEIGHT = 100, 250
+MIN_WEIGHT, MAX_WEIGHT = 30, 250
+
 @router.message(CommandStart())
 async def cmd_start(message: types.Message, state: FSMContext):
     telegram_id = str(message.from_user.id)
@@ -31,6 +36,9 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
 @router.message(RegistrationStates.waiting_for_name)
 async def process_name(message: types.Message, state: FSMContext):
+    if len(message.text) < 2 or len(message.text) > 50:
+        await message.answer("Пожалуйста, введи корректное имя (от 2 до 50 символов).")
+        return
     await state.update_data(name=message.text)
     await message.answer("Сколько тебе лет?")
     await state.set_state(RegistrationStates.waiting_for_age)
@@ -40,24 +48,38 @@ async def process_age(message: types.Message, state: FSMContext):
     if not message.text.isdigit():
         await message.answer("Пожалуйста, введи число.")
         return
-    await state.update_data(age=int(message.text))
+    
+    age = int(message.text)
+    if not (MIN_AGE <= age <= MAX_AGE):
+        await message.answer(f"Пожалуйста, введи реальный возраст (от {MIN_AGE} до {MAX_AGE} лет).")
+        return
+
+    await state.update_data(age=age)
     await message.answer("Какой у тебя рост (в см)?")
     await state.set_state(RegistrationStates.waiting_for_height)
 
 @router.message(RegistrationStates.waiting_for_height)
 async def process_height(message: types.Message, state: FSMContext):
     try:
-        height = float(message.text)
+        height = float(message.text.replace(',', '.'))
+        if not (MIN_HEIGHT <= height <= MAX_HEIGHT):
+            await message.answer(f"Пожалуйста, введи реальный рост (от {MIN_HEIGHT} до {MAX_HEIGHT} см).")
+            return
+            
         await state.update_data(height_cm=height)
         await message.answer("Какой у тебя сейчас вес (в кг)?")
         await state.set_state(RegistrationStates.waiting_for_weight)
     except ValueError:
-        await message.answer("Пожалуйста, введи число.")
+        await message.answer("Пожалуйста, введи число (например: 175 или 180.5).")
 
 @router.message(RegistrationStates.waiting_for_weight)
 async def process_weight(message: types.Message, state: FSMContext):
     try:
-        weight = float(message.text)
+        weight = float(message.text.replace(',', '.'))
+        if not (MIN_WEIGHT <= weight <= MAX_WEIGHT):
+            await message.answer(f"Пожалуйста, введи реальный вес (от {MIN_WEIGHT} до {MAX_WEIGHT} кг).")
+            return
+            
         await state.update_data(weight_kg=weight)
         
         builder = InlineKeyboardBuilder()
@@ -72,7 +94,7 @@ async def process_weight(message: types.Message, state: FSMContext):
         )
         await state.set_state(RegistrationStates.waiting_for_goal)
     except ValueError:
-        await message.answer("Пожалуйста, введи число.")
+        await message.answer("Пожалуйста, введи число (например: 75 или 82.5).")
 
 @router.callback_query(RegistrationStates.waiting_for_goal, F.data.startswith("goal_"))
 async def process_goal_callback(callback: types.CallbackQuery, state: FSMContext):
@@ -86,7 +108,6 @@ async def process_goal_callback(callback: types.CallbackQuery, state: FSMContext
         with database.db_session() as db:
             crud.create_user(db, data)
         
-        # Text for feedback
         goals_text = {
             "strength": "Сила",
             "hypertrophy": "Гипертрофия",
