@@ -11,6 +11,7 @@ router = Router()
 sheets = SheetsClient()
 
 class RegistrationStates(StatesGroup):
+    waiting_for_language = State()
     waiting_for_name = State()
     waiting_for_age = State()
     waiting_for_height = State()
@@ -30,81 +31,161 @@ async def cmd_start(message: types.Message, state: FSMContext):
         user = await crud.get_user_by_telegram_id(db, telegram_id)
     
     if user:
-        await message.answer(f"Привет, {user.name}! С возвращением. Используй /workout чтобы начать тренировку.")
+        welcome_text = "Привет, {}! С возвращением. Используй /workout чтобы начать тренировку."
+        if user.language == "en":
+            welcome_text = "Hello, {}! Welcome back. Use /workout to start a training session."
+            
+        await message.answer(welcome_text.format(user.name))
         # Ensure spreadsheet is ready
         sheets.setup_spreadsheet()
         await state.clear()
     else:
-        await message.answer("Привет! Я твой AI тренер. Давай познакомимся. Как тебя зовут?")
-        await state.set_state(RegistrationStates.waiting_for_name)
+        builder = InlineKeyboardBuilder()
+        builder.button(text="Русский 🇷🇺", callback_data="lang_ru")
+        builder.button(text="English 🇺🇸", callback_data="lang_en")
+        builder.adjust(2)
+        
+        await message.answer(
+            "Привет! Выбери язык интерфейса / Choose your language:",
+            reply_markup=builder.as_markup()
+        )
+        await state.set_state(RegistrationStates.waiting_for_language)
+
+@router.callback_query(RegistrationStates.waiting_for_language, F.data.startswith("lang_"))
+async def process_language(callback: types.CallbackQuery, state: FSMContext):
+    lang = callback.data.split("_")[1]
+    await state.update_data(language=lang)
+    
+    prompt = "Как тебя зовут?"
+    if lang == "en":
+        prompt = "What is your name?"
+        
+    await callback.message.edit_text(prompt)
+    await state.set_state(RegistrationStates.waiting_for_name)
+    await callback.answer()
 
 @router.message(RegistrationStates.waiting_for_name)
 async def process_name(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    
     if len(message.text) < 2 or len(message.text) > 50:
-        await message.answer("Пожалуйста, введи корректное имя (от 2 до 50 символов).")
+        error = "Пожалуйста, введи корректное имя (от 2 до 50 символов)."
+        if lang == "en":
+            error = "Please enter a valid name (2 to 50 characters)."
+        await message.answer(error)
         return
+        
     await state.update_data(name=message.text)
-    await message.answer("Сколько тебе лет?")
+    
+    prompt = "Сколько тебе лет?"
+    if lang == "en":
+        prompt = "How old are you?"
+        
+    await message.answer(prompt)
     await state.set_state(RegistrationStates.waiting_for_age)
 
 @router.message(RegistrationStates.waiting_for_age)
 async def process_age(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    
     if not message.text.isdigit():
-        await message.answer("Пожалуйста, введи число.")
+        error = "Пожалуйста, введи число."
+        if lang == "en":
+            error = "Please enter a number."
+        await message.answer(error)
         return
     
     age = int(message.text)
     if not (MIN_AGE <= age <= MAX_AGE):
-        await message.answer(f"Пожалуйста, введи реальный возраст (от {MIN_AGE} до {MAX_AGE} лет).")
+        error = f"Пожалуйста, введи реальный возраст (от {MIN_AGE} до {MAX_AGE} лет)."
+        if lang == "en":
+            error = f"Please enter a realistic age (from {MIN_AGE} to {MAX_AGE} years)."
+        await message.answer(error)
         return
 
     await state.update_data(age=age)
-    await message.answer("Какой у тебя рост (в см)?")
+    
+    prompt = "Какой у тебя рост (в см)?"
+    if lang == "en":
+        prompt = "What is your height (in cm)?"
+        
+    await message.answer(prompt)
     await state.set_state(RegistrationStates.waiting_for_height)
 
 @router.message(RegistrationStates.waiting_for_height)
 async def process_height(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    
     try:
         height = float(message.text.replace(',', '.'))
         if not (MIN_HEIGHT <= height <= MAX_HEIGHT):
-            await message.answer(f"Пожалуйста, введи реальный рост (от {MIN_HEIGHT} до {MAX_HEIGHT} см).")
+            error = f"Пожалуйста, введи реальный рост (от {MIN_HEIGHT} до {MAX_HEIGHT} см)."
+            if lang == "en":
+                error = f"Please enter a realistic height (from {MIN_HEIGHT} to {MAX_HEIGHT} cm)."
+            await message.answer(error)
             return
             
         await state.update_data(height_cm=height)
-        await message.answer("Какой у тебя сейчас вес (в кг)?")
+        
+        prompt = "Какой у тебя сейчас вес (в кг)?"
+        if lang == "en":
+            prompt = "What is your current weight (in kg)?"
+            
+        await message.answer(prompt)
         await state.set_state(RegistrationStates.waiting_for_weight)
     except ValueError:
-        await message.answer("Пожалуйста, введи число (например: 175 или 180.5).")
+        error = "Пожалуйста, введи число (например: 175 или 180.5)."
+        if lang == "en":
+            error = "Please enter a number (e.g., 175 or 180.5)."
+        await message.answer(error)
 
 @router.message(RegistrationStates.waiting_for_weight)
 async def process_weight(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    
     try:
         weight = float(message.text.replace(',', '.'))
         if not (MIN_WEIGHT <= weight <= MAX_WEIGHT):
-            await message.answer(f"Пожалуйста, введи реальный вес (от {MIN_WEIGHT} до {MAX_WEIGHT} кг).")
+            error = f"Пожалуйста, введи реальный вес (от {MIN_WEIGHT} до {MAX_WEIGHT} кг)."
+            if lang == "en":
+                error = f"Please enter a realistic weight (from {MIN_WEIGHT} to {MAX_WEIGHT} kg)."
+            await message.answer(error)
             return
             
         await state.update_data(weight_kg=weight)
         
         builder = InlineKeyboardBuilder()
-        builder.button(text="💪 Сила", callback_data="goal_strength")
-        builder.button(text="🏗️ Гипертрофия", callback_data="goal_hypertrophy")
-        builder.button(text="📉 Похудение", callback_data="goal_fat_loss")
+        if lang == "ru":
+            builder.button(text="💪 Сила", callback_data="goal_strength")
+            builder.button(text="🏗️ Гипертрофия", callback_data="goal_hypertrophy")
+            builder.button(text="📉 Похудение", callback_data="goal_fat_loss")
+            prompt = "Какая у тебя цель?"
+        else:
+            builder.button(text="💪 Strength", callback_data="goal_strength")
+            builder.button(text="🏗️ Hypertrophy", callback_data="goal_hypertrophy")
+            builder.button(text="📉 Fat Loss", callback_data="goal_fat_loss")
+            prompt = "What is your goal?"
+            
         builder.adjust(1)
         
-        await message.answer(
-            "Какая у тебя цель?",
-            reply_markup=builder.as_markup()
-        )
+        await message.answer(prompt, reply_markup=builder.as_markup())
         await state.set_state(RegistrationStates.waiting_for_goal)
     except ValueError:
-        await message.answer("Пожалуйста, введи число (например: 75 или 82.5).")
+        error = "Пожалуйста, введи число (например: 75 или 82.5)."
+        if lang == "en":
+            error = "Please enter a number (e.g., 75 or 82.5)."
+        await message.answer(error)
 
 @router.callback_query(RegistrationStates.waiting_for_goal, F.data.startswith("goal_"))
 async def process_goal_callback(callback: types.CallbackQuery, state: FSMContext):
     goal = callback.data.split("_")[1]
     
     data = await state.get_data()
+    lang = data.get("language", "ru")
     data['goal'] = goal
     data['telegram_id'] = str(callback.from_user.id)
     
@@ -112,24 +193,34 @@ async def process_goal_callback(callback: types.CallbackQuery, state: FSMContext
         async with database.db_session() as db:
             user = await crud.create_user(db, data)
         
-        # Initialize and update Google Sheets
+        # Initialize Google Sheets
         sheets.setup_spreadsheet()
-        await sheets.log_nutrition(user.name, {"meal_name": "Initial Setup", "description": "Profile Created", "calories": 0, "protein": 0, "carbs": 0, "fat": 0})
         
-        goals_text = {
-            "strength": "Сила",
-            "hypertrophy": "Гипертрофия",
-            "fat_loss": "Похудение"
-        }
+        # Text for feedback
+        if lang == "ru":
+            goals_text = {"strength": "Сила", "hypertrophy": "Гипертрофия", "fat_loss": "Похудение"}
+            success_msg = f"Цель выбрана: {goals_text.get(goal)}\nОтлично! Профиль создан. Теперь ты можешь использовать /workout для записи тренировок."
+        else:
+            goals_text = {"strength": "Strength", "hypertrophy": "Hypertrophy", "fat_loss": "Fat Loss"}
+            success_msg = f"Goal selected: {goals_text.get(goal)}\nGreat! Profile created. Now you can use /workout to record training sessions."
         
-        await callback.message.edit_text(f"Цель выбрана: {goals_text.get(goal)}\nОтлично! Профиль создан. Теперь ты можешь использовать /workout для записи тренировок.")
+        await callback.message.edit_text(success_msg)
         await callback.answer()
     except Exception as e:
         logger.error(f"Error creating user: {e}")
-        await callback.message.answer("Произошла ошибка при создании профиля.")
+        error_msg = "Произошла ошибка при создании профиля."
+        if lang == "en":
+            error_msg = "An error occurred while creating your profile."
+        await callback.message.answer(error_msg)
     finally:
         await state.clear()
 
 @router.message(RegistrationStates.waiting_for_goal)
-async def process_goal_text(message: types.Message):
-    await message.answer("Пожалуйста, выбери цель, нажав на одну из кнопок выше.")
+async def process_goal_text(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("language", "ru")
+    
+    msg = "Пожалуйста, выбери цель, нажав на одну из кнопок выше."
+    if lang == "en":
+        msg = "Please select a goal by clicking one of the buttons above."
+    await message.answer(msg)

@@ -23,6 +23,7 @@ class User(Base):
     id              = Column(Integer, primary_key=True)
     telegram_id     = Column(String, unique=True, nullable=False)
     name            = Column(String)
+    language        = Column(String, default="ru") # ru / en
     age             = Column(Integer)
     height_cm       = Column(Float)
     weight_kg       = Column(Float)
