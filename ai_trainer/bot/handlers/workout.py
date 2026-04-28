@@ -14,6 +14,7 @@ class WorkoutStates(StatesGroup):
     entering_weight = State()
     entering_reps = State()
     adding_more = State()
+    entering_duration = State()
 
 @router.message(F.text == "/workout")
 async def cmd_workout(message: types.Message, state: FSMContext):
@@ -96,7 +97,17 @@ async def add_more(message: types.Message, state: FSMContext):
     await state.set_state(WorkoutStates.logging_exercise)
 
 @router.message(WorkoutStates.adding_more, F.text == "Завершить")
+async def ask_duration(message: types.Message, state: FSMContext):
+    await message.answer("Сколько минут длилась тренировка?", reply_markup=types.ReplyKeyboardRemove())
+    await state.set_state(WorkoutStates.entering_duration)
+
+@router.message(WorkoutStates.entering_duration)
 async def finish_workout(message: types.Message, state: FSMContext):
+    if not message.text.isdigit():
+        await message.answer("Пожалуйста, введи количество минут числом.")
+        return
+        
+    duration = int(message.text)
     data = await state.get_data()
     telegram_id = str(message.from_user.id)
     
@@ -111,7 +122,7 @@ async def finish_workout(message: types.Message, state: FSMContext):
             
             workout_data = {
                 "workout_type": data['workout_type'],
-                "duration_min": 60, # Dummy duration
+                "duration_min": duration,
                 "notes": ""
             }
             crud.create_workout_session(db, user.id, workout_data, data['exercises'])
@@ -120,7 +131,7 @@ async def finish_workout(message: types.Message, state: FSMContext):
             for ex in data['exercises']:
                 crud.update_personal_record(db, user.id, ex['name'], max(ex['weight_kg']), min(ex['reps']))
                 
-        await message.answer("✅ Тренировка сохранена! Отличная работа.", reply_markup=types.ReplyKeyboardRemove())
+        await message.answer(f"✅ Тренировка ({duration} мин) сохранена! Отличная работа.")
     except Exception as e:
         logger.error(f"Error saving workout: {e}")
         await message.answer("Произошла ошибка при сохранении тренировки.")
