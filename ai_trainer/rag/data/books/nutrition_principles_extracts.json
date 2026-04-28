@@ -1,0 +1,16 @@
+{
+  "book_title": "The Muscle and Strength Pyramids",
+  "author": "Eric Helms",
+  "extracts": [
+    {
+      "topic": "Protein Intake",
+      "content": "A protein intake of 1.6 to 2.2 grams per kilogram of body weight is sufficient for most lifters to maximize muscle growth. During a fat-loss phase, higher intakes (up to 2.5g/kg) may be beneficial to preserve lean body mass.",
+      "tags": ["nutrition", "protein", "macros"]
+    },
+    {
+      "topic": "Energy Balance",
+      "content": "The foundation of any body composition goal is energy balance. To lose fat, a caloric deficit is required. To gain muscle optimally, a small caloric surplus is generally recommended, though beginners can often gain muscle at maintenance calories.",
+      "tags": ["nutrition", "calories", "fat loss", "muscle gain"]
+    }
+  ]
+}

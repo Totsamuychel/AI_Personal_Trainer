@@ -1,0 +1,16 @@
+{
+  "book_title": "The Art and Science of Lifting",
+  "author": "Greg Nuckols",
+  "extracts": [
+    {
+      "topic": "Periodization",
+      "content": "Periodization is the purposeful sequencing of training units (sessions, days, weeks, months) so that the athlete can attain the highest possible performance at the most important competition. It involves managing fatigue and fitness to peak at the right time.",
+      "tags": ["periodization", "programming", "fatigue management"]
+    },
+    {
+      "topic": "Hypertrophy",
+      "content": "Mechanical tension, metabolic stress, and muscle damage are the three primary mechanisms of muscle hypertrophy. Of these, mechanical tension is likely the most important, which is why progressive overload—increasing the weight or reps over time—is critical.",
+      "tags": ["hypertrophy", "mechanisms", "progressive overload"]
+    }
+  ]
+}

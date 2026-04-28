@@ -42,6 +42,33 @@ class FitnessKnowledgeBase:
         self.vectorstore.add_documents(docs)
         print(f"Loaded {len(docs)} exercises from {json_path}")
 
+    def load_books_from_json(self, json_path: str):
+        """Loads book extracts from a JSON file."""
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        book_title = data.get("book_title", "Unknown Book")
+        author = data.get("author", "Unknown Author")
+        
+        docs = []
+        for extract in data.get('extracts', []):
+            content = f"Источник: {book_title} ({author})\n" \
+                      f"Тема: {extract['topic']}\n" \
+                      f"Содержание: {extract['content']}"
+            
+            docs.append(Document(
+                page_content=content,
+                metadata={
+                    "title": book_title,
+                    "topic": extract['topic'],
+                    "type": "book_extract",
+                    "tags": extract.get("tags", [])
+                }
+            ))
+            
+        self.vectorstore.add_documents(docs)
+        print(f"Loaded {len(docs)} book extracts from {json_path}")
+
     def search(self, query: str, k: int = 3):
         """Semantic search in the knowledge base."""
         return self.vectorstore.similarity_search(query, k=k)
