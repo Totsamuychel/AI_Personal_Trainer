@@ -6,11 +6,14 @@ from langchain_community.llms import Ollama
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from loguru import logger
 import os
+from ai_trainer.db import crud, database, models
 
 class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], operator.add]
     user_id: str
     user_profile: dict
+    personal_records: List[dict]
+    recent_workouts: List[dict]
     retrieved_context: str
     current_plan: dict
     action_type: str  # workout_log / nutrition_log / plan_gen / tip / analysis
@@ -26,15 +29,73 @@ def get_llm():
         )
 
 def load_user_profile_node(state: AgentState):
-    logger.info(f"Loading profile for user {state['user_id']}")
-    # logic to load from DB
-    return {"user_profile": {"name": "User", "goal": "strength"}}
+    logger.info(f"Loading real profile for user {state['user_id']}")
+    
+    with database.db_session() as db:
+        user = crud.get_user_by_telegram_id(db, state['user_id'])
+        
+        if not user:
+            logger.warning(f"User {state['user_id']} not found in DB")
+            return {
+                "user_profile": {"name": "Guest", "goal": "unknown"},
+                "personal_records": [],
+                "recent_workouts": []
+            }
+        
+        # Convert user object to dict for state
+        profile = {
+            "name": user.name,
+            "age": user.age,
+            "height": user.height_cm,
+            "weight": user.weight_kg,
+            "goal": user.goal.value if user.goal else "N/A",
+            "level": user.level,
+            "preferred_split": user.preferred_split,
+            "injuries": user.injuries
+        }
+        
+        # Load PRs
+        prs = db.query(models.PersonalRecord).filter(models.PersonalRecord.user_id == user.id).all()
+        pr_list = [
+            {"exercise": pr.exercise, "weight": pr.weight_kg, "reps": pr.reps, "1rm": pr.one_rm_est}
+            for pr in prs
+        ]
+        
+        # Load recent workouts
+        history = crud.get_workout_history(db, user.id, limit=5)
+        workout_list = [
+            {"date": w.date.isoformat(), "type": w.workout_type, "notes": w.notes}
+            for w in history
+        ]
+        
+        return {
+            "user_profile": profile,
+            "personal_records": pr_list,
+            "recent_workouts": workout_list
+        }
 
 def run_agent_node(state: AgentState):
     llm = get_llm()
-    # Simplified agent logic
-    prompt = "Ты AI Тренер. Помоги пользователю."
-    messages = [SystemMessage(content=prompt)] + state['messages']
+    
+    # Construct system message with user profile
+    profile = state.get('user_profile', {})
+    prs = state.get('personal_records', [])
+    history = state.get('recent_workouts', [])
+    
+    system_prompt = f"""
+    Ты — AI персональный тренер.
+    Клиент: {profile.get('name', 'N/A')}
+    Цель: {profile.get('goal', 'N/A')}
+    Вес: {profile.get('weight', 'N/A')} кг
+    Травмы: {profile.get('injuries', 'Нет')}
+    
+    Личные рекорды: {prs}
+    Последние тренировки: {history}
+    
+    Помогай клиенту достигать целей, будь профессионален и мотивируй!
+    """
+    
+    messages = [SystemMessage(content=system_prompt)] + state['messages']
     response = llm.invoke(messages)
     return {"messages": [response]}
 
@@ -49,6 +110,3 @@ def build_trainer_graph():
     workflow.add_edge("agent", END)
 
     return workflow.compile()
-
-# Example usage
-# trainer_agent = build_trainer_graph()
