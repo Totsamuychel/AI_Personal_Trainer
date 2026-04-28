@@ -69,6 +69,36 @@ class FitnessKnowledgeBase:
         self.vectorstore.add_documents(docs)
         print(f"Loaded {len(docs)} book extracts from {json_path}")
 
+    def load_book_chunks(self, text_path: str, metadata: dict = None):
+        """Loads a large text file, splits it into chunks, and adds to vector store."""
+        if not os.path.exists(text_path):
+            print(f"Error: File not found {text_path}")
+            return
+
+        with open(text_path, 'r', encoding='utf-8') as f:
+            text = f.read()
+
+        # Split text into chunks
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=100,
+            length_function=len,
+        )
+        chunks = text_splitter.split_text(text)
+        
+        docs = []
+        for i, chunk in enumerate(chunks):
+            chunk_metadata = metadata.copy() if metadata else {}
+            chunk_metadata.update({"chunk_index": i, "type": "book_chunk"})
+            
+            docs.append(Document(
+                page_content=chunk,
+                metadata=chunk_metadata
+            ))
+            
+        self.vectorstore.add_documents(docs)
+        print(f"Added {len(docs)} chunks from {text_path} to vector store")
+
     def search(self, query: str, k: int = 3):
         """Semantic search in the knowledge base."""
         return self.vectorstore.similarity_search(query, k=k)
