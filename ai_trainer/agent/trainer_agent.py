@@ -2,7 +2,7 @@ from typing import TypedDict, Annotated, List, Union
 import operator
 from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI
-from langchain_community.llms import Ollama
+from langchain_community.chat_models import ChatOllama
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from loguru import logger
 import os
@@ -24,7 +24,7 @@ def get_llm():
     if provider == "openai":
         return ChatOpenAI(model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
     else:
-        return Ollama(
+        return ChatOllama(
             model=os.getenv("OLLAMA_MODEL", "llama3.1:8b"),
             base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         )
