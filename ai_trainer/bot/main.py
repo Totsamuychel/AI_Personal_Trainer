@@ -29,7 +29,7 @@ async def main():
 
     # Register routers
     dp.include_router(start.router)
-    # dp.include_router(workout.router) # Will add later
+    dp.include_router(workout.router)
 
     # Start polling
     try:
