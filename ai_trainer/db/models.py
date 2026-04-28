@@ -1,10 +1,10 @@
 from sqlalchemy import Column, Integer, String, Float, JSON, DateTime, ForeignKey, Enum
-from sqlalchemy.orm import relationship
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship, DeclarativeBase
 import enum
-from datetime import datetime
+from datetime import datetime, timezone
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 class GoalType(enum.Enum):
     strength    = "strength"
@@ -29,8 +29,8 @@ class User(Base):
     goal            = Column(Enum(GoalType))
     level           = Column(String)           # beginner / intermediate / advanced
     preferred_split = Column(String)           # PPL / Upper-Lower / Full Body
-    injuries        = Column(JSON, default=[]) # ["боль в колене", ...]
-    created_at      = Column(DateTime, default=datetime.utcnow)
+    injuries        = Column(JSON, default=list) # ["боль в колене", ...]
+    created_at      = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     workouts        = relationship("WorkoutSession", back_populates="user")
     plans           = relationship("WeeklyPlan", back_populates="user")
@@ -40,7 +40,7 @@ class WorkoutSession(Base):
     __tablename__ = "workout_sessions"
     id           = Column(Integer, primary_key=True)
     user_id      = Column(Integer, ForeignKey("users.id"))
-    date         = Column(DateTime, default=datetime.utcnow)
+    date         = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     workout_type = Column(String)              # Push / Pull / Legs / Full Body
     week_type    = Column(Enum(WeekType))
     duration_min = Column(Integer)
@@ -70,7 +70,7 @@ class PersonalRecord(Base):
     weight_kg   = Column(Float)
     reps        = Column(Integer)
     one_rm_est  = Column(Float)  # Расчётный 1RM по формуле Epley
-    date        = Column(DateTime, default=datetime.utcnow)
+    date        = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class WeeklyPlan(Base):
     __tablename__ = "weekly_plans"
@@ -88,7 +88,7 @@ class NutritionLog(Base):
     __tablename__ = "nutrition_logs"
     id           = Column(Integer, primary_key=True)
     user_id      = Column(Integer, ForeignKey("users.id"))
-    date         = Column(DateTime, default=datetime.utcnow)
+    date         = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     meal_name    = Column(String)
     description  = Column(String)      # Исходный текст пользователя
     calories     = Column(Float)
