@@ -101,23 +101,28 @@ async def run_agent_node(state: AgentState):
     prs = state.get('personal_records', [])
     history = state.get('recent_workouts', [])
     context = state.get('retrieved_context', "")
+    plan = state.get('current_plan', {})
     
-    system_prompt = f"""
-    Ты — AI персональный тренер.
-    Клиент: {profile.get('name', 'N/A')}
-    Цель: {profile.get('goal', 'N/A')}
-    Вес: {profile.get('weight', 'N/A')} кг
-    Травмы: {profile.get('injuries', 'Нет')}
+    # Load system prompt from file
+    prompt_path = os.path.join(os.path.dirname(__file__), "prompts", "system_prompt.txt")
+    with open(prompt_path, "r", encoding="utf-8") as f:
+        system_prompt_template = f.read()
     
-    Личные рекорды: {prs}
-    Последние тренировки: {history}
-    
-    ### Справочная информация (RAG):
-    {context}
-    
-    Используй справочную информацию выше, чтобы давать максимально точные и научно обоснованные советы. 
-    Помогай клиенту достигать целей, будь профессионален и мотивируй!
-    """
+    system_prompt = system_prompt_template.format(
+        name=profile.get('name', 'N/A'),
+        age=profile.get('age', 'N/A'),
+        height=profile.get('height', 'N/A'),
+        weight=profile.get('weight', 'N/A'),
+        goal=profile.get('goal', 'N/A'),
+        level=profile.get('level', 'N/A'),
+        preferred_split=profile.get('preferred_split', 'N/A'),
+        week_type="N/A", # Will be filled from current_plan if needed
+        injuries=profile.get('injuries', 'None'),
+        personal_records=json.dumps(prs, ensure_ascii=False, indent=2),
+        recent_workouts=json.dumps(history, ensure_ascii=False, indent=2),
+        current_plan=json.dumps(plan, ensure_ascii=False, indent=2),
+        retrieved_context=context
+    )
     
     messages = [SystemMessage(content=system_prompt)] + state['messages']
     response = await llm.ainvoke(messages)
