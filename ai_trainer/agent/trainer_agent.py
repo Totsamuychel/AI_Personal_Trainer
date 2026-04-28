@@ -7,7 +7,11 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, System
 from loguru import logger
 import os
 from ai_trainer.db import crud, database, models
+from ai_trainer.rag.knowledge_base import FitnessKnowledgeBase
 from sqlalchemy import select
+
+# Initialize knowledge base
+kb = FitnessKnowledgeBase()
 
 class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], operator.add]
@@ -78,14 +82,25 @@ async def load_user_profile_node(state: AgentState):
             "recent_workouts": workout_list
         }
 
+async def retrieve_context_node(state: AgentState):
+    """Retrieves relevant context from the RAG knowledge base."""
+    last_message = state['messages'][-1].content if state['messages'] else ""
+    logger.info(f"Retrieving context for query: {last_message[:50]}...")
+    
+    docs = kb.search(last_message, k=3)
+    context_text = "\n\n".join([doc.page_content for doc in docs])
+    
+    return {"retrieved_context": context_text}
+
 async def run_agent_node(state: AgentState):
-    """Construct system message with user profile and invoke the LLM."""
+    """Construct system message with user profile and retrieved context, then invoke the LLM."""
     llm = get_llm()
     
     # Construct system message with user profile
     profile = state.get('user_profile', {})
     prs = state.get('personal_records', [])
     history = state.get('recent_workouts', [])
+    context = state.get('retrieved_context', "")
     
     system_prompt = f"""
     Ты — AI персональный тренер.
@@ -97,6 +112,10 @@ async def run_agent_node(state: AgentState):
     Личные рекорды: {prs}
     Последние тренировки: {history}
     
+    ### Справочная информация (RAG):
+    {context}
+    
+    Используй справочную информацию выше, чтобы давать максимально точные и научно обоснованные советы. 
     Помогай клиенту достигать целей, будь профессионален и мотивируй!
     """
     
@@ -109,10 +128,12 @@ def build_trainer_graph():
     workflow = StateGraph(AgentState)
 
     workflow.add_node("load_profile", load_user_profile_node)
+    workflow.add_node("retrieve_context", retrieve_context_node)
     workflow.add_node("agent", run_agent_node)
 
     workflow.set_entry_point("load_profile")
-    workflow.add_edge("load_profile", "agent")
+    workflow.add_edge("load_profile", "retrieve_context")
+    workflow.add_edge("retrieve_context", "agent")
     workflow.add_edge("agent", END)
 
     return workflow.compile()
