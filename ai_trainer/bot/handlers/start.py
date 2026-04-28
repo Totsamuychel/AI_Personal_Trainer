@@ -4,9 +4,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from ai_trainer.db import crud, database
+from ai_trainer.sheets.client import SheetsClient
 from loguru import logger
 
 router = Router()
+sheets = SheetsClient()
 
 class RegistrationStates(StatesGroup):
     waiting_for_name = State()
@@ -29,6 +31,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
     
     if user:
         await message.answer(f"Привет, {user.name}! С возвращением. Используй /workout чтобы начать тренировку.")
+        # Ensure spreadsheet is ready
+        sheets.setup_spreadsheet()
         await state.clear()
     else:
         await message.answer("Привет! Я твой AI тренер. Давай познакомимся. Как тебя зовут?")
@@ -106,7 +110,11 @@ async def process_goal_callback(callback: types.CallbackQuery, state: FSMContext
     
     try:
         async with database.db_session() as db:
-            await crud.create_user(db, data)
+            user = await crud.create_user(db, data)
+        
+        # Initialize and update Google Sheets
+        sheets.setup_spreadsheet()
+        await sheets.log_nutrition(user.name, {"meal_name": "Initial Setup", "description": "Profile Created", "calories": 0, "protein": 0, "carbs": 0, "fat": 0})
         
         goals_text = {
             "strength": "Сила",

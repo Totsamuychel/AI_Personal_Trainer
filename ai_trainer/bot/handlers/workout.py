@@ -3,9 +3,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 from ai_trainer.db import crud, database
+from ai_trainer.sheets.client import SheetsClient
 from loguru import logger
 
 router = Router()
+sheets = SheetsClient()
 
 class WorkoutStates(StatesGroup):
     choosing_type = State()
@@ -130,8 +132,14 @@ async def finish_workout(message: types.Message, state: FSMContext):
             # Update PRs
             for ex in data['exercises']:
                 await crud.update_personal_record(db, user.id, ex['name'], max(ex['weight_kg']), min(ex['reps']))
+            
+            # Sync to Google Sheets
+            await sheets.log_workout(user.name, {
+                "workout_type": data['workout_type'],
+                "exercises": data['exercises']
+            })
                 
-        await message.answer(f"✅ Тренировка ({duration} мин) сохранена! Отличная работа.")
+        await message.answer(f"✅ Тренировка ({duration} мин) сохранена и синхронизирована с Google Таблицей! Отличная работа.")
     except Exception as e:
         logger.error(f"Error saving workout: {e}")
         await message.answer("Произошла ошибка при сохранении тренировки.")
