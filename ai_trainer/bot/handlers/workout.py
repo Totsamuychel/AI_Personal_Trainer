@@ -100,26 +100,26 @@ async def finish_workout(message: types.Message, state: FSMContext):
     data = await state.get_data()
     telegram_id = str(message.from_user.id)
     
-    db = next(database.get_db())
-    user = crud.get_user_by_telegram_id(db, telegram_id)
-    
-    if not user:
-        await message.answer("Ошибка: пользователь не найден.")
-        await state.clear()
-        return
-    
     try:
-        workout_data = {
-            "workout_type": data['workout_type'],
-            "duration_min": 60, # Dummy duration
-            "notes": ""
-        }
-        crud.create_workout_session(db, user.id, workout_data, data['exercises'])
-        
-        # Update PRs
-        for ex in data['exercises']:
-            crud.update_personal_record(db, user.id, ex['name'], max(ex['weight_kg']), min(ex['reps']))
+        with database.db_session() as db:
+            user = crud.get_user_by_telegram_id(db, telegram_id)
             
+            if not user:
+                await message.answer("Ошибка: пользователь не найден.")
+                await state.clear()
+                return
+            
+            workout_data = {
+                "workout_type": data['workout_type'],
+                "duration_min": 60, # Dummy duration
+                "notes": ""
+            }
+            crud.create_workout_session(db, user.id, workout_data, data['exercises'])
+            
+            # Update PRs
+            for ex in data['exercises']:
+                crud.update_personal_record(db, user.id, ex['name'], max(ex['weight_kg']), min(ex['reps']))
+                
         await message.answer("✅ Тренировка сохранена! Отличная работа.", reply_markup=types.ReplyKeyboardRemove())
     except Exception as e:
         logger.error(f"Error saving workout: {e}")

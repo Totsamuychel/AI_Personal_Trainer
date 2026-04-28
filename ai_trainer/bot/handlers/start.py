@@ -18,8 +18,8 @@ class RegistrationStates(StatesGroup):
 async def cmd_start(message: types.Message, state: FSMContext):
     telegram_id = str(message.from_user.id)
     
-    db = next(database.get_db())
-    user = crud.get_user_by_telegram_id(db, telegram_id)
+    with database.db_session() as db:
+        user = crud.get_user_by_telegram_id(db, telegram_id)
     
     if user:
         await message.answer(f"Привет, {user.name}! С возвращением. Используй /workout чтобы начать тренировку.")
@@ -79,9 +79,9 @@ async def process_goal(message: types.Message, state: FSMContext):
     data['goal'] = goal_map[user_goal]
     data['telegram_id'] = str(message.from_user.id)
     
-    db = next(database.get_db())
     try:
-        crud.create_user(db, data)
+        with database.db_session() as db:
+            crud.create_user(db, data)
         await message.answer("Отлично! Профиль создан. Теперь ты можешь использовать /workout для записи тренировок.")
     except Exception as e:
         logger.error(f"Error creating user: {e}")
