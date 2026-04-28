@@ -1,18 +1,27 @@
+# Core Frameworks
 aiogram==3.4.1
 fastapi==0.110.0
 uvicorn==0.27.1
+
+# Database & Migrations
 sqlalchemy==2.0.28
 alembic==1.13.1
 psycopg2-binary==2.9.9
 asyncpg==0.29.0
+
+# AI & LLM
 chromadb==0.4.24
 langchain==0.1.12
 langchain-community==0.0.28
 langchain-openai==0.0.8
 langgraph==0.0.30
+
+# External Integrations
 gspread==6.0.2
 google-auth==2.28.2
 apscheduler==3.10.4
+
+# Utilities & Quality
 pydantic==2.6.4
 loguru==0.7.2
 pytest==8.1.1
