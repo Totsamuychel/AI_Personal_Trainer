@@ -1,11 +1,15 @@
 from langchain.tools import tool
 from datetime import datetime, timedelta
+from ai_trainer.db import crud, database, models
+from loguru import logger
+import json
 
 PERIODIZATION_CYCLE = [
     {
         "week_type": "strength",
         "name": "💪 Силовая неделя",
         "intensity": "85-90% от 1RM",
+        "intensity_val": 0.875,
         "sets": 4,
         "reps_range": "4-6",
         "rest_sec": 180,
@@ -14,6 +18,7 @@ PERIODIZATION_CYCLE = [
         "week_type": "hypertrophy",
         "name": "🏗️ Гипертрофия",
         "intensity": "70-75% от 1RM",
+        "intensity_val": 0.725,
         "sets": 4,
         "reps_range": "8-12",
         "rest_sec": 90,
@@ -22,6 +27,7 @@ PERIODIZATION_CYCLE = [
         "week_type": "volume",
         "name": "📦 Объёмная неделя",
         "intensity": "60-65% от 1RM",
+        "intensity_val": 0.625,
         "sets": 3,
         "reps_range": "12-15",
         "rest_sec": 60,
@@ -30,6 +36,7 @@ PERIODIZATION_CYCLE = [
         "week_type": "deload",
         "name": "🔄 Разгрузочная неделя",
         "intensity": "50% от 1RM",
+        "intensity_val": 0.50,
         "sets": 2,
         "reps_range": "10-12",
         "rest_sec": 60,
@@ -37,20 +44,118 @@ PERIODIZATION_CYCLE = [
 ]
 
 @tool
-def get_periodization_info(week_number: int) -> dict:
-    """Возвращает параметры периодизации для указанной недели (0-3)."""
-    return PERIODIZATION_CYCLE[week_number % 4]
+def generate_weekly_plan_tool(telegram_id: str) -> str:
+    """
+    Генерирует план тренировок на следующую неделю для пользователя.
+    Автоматически определяет тип недели из цикла (сила/гипертрофия/объём/разгрузка).
+    """
+    try:
+        with database.db_session() as db:
+            user = crud.get_user_by_telegram_id(db, telegram_id)
+            if not user:
+                return "Ошибка: пользователь не найден."
+
+            # Определяем номер следующей недели
+            last_plan = db.query(models.WeeklyPlan).filter(
+                models.WeeklyPlan.user_id == user.id
+            ).order_by(models.WeeklyPlan.week_number.desc()).first()
+            
+            next_week_num = (last_plan.week_number + 1) if last_plan else 1
+            week_info = PERIODIZATION_CYCLE[(next_week_num - 1) % 4]
+            
+            # Получаем рекорды для расчета весов
+            prs = db.query(models.PersonalRecord).filter(models.PersonalRecord.user_id == user.id).all()
+            pr_map = {pr.exercise.lower(): pr.one_rm_est for pr in prs}
+            
+            # Базовая структура плана (MVP)
+            # В реальном приложении здесь может быть вызов LLM для составления упражнений
+            # Здесь мы создаем структуру, которую потом может наполнить агент
+            
+            plan_data = {
+                "week_number": next_week_num,
+                "week_type": week_info["week_type"],
+                "week_name": week_info["name"],
+                "days": [
+                    {
+                        "day": "Понедельник",
+                        "type": "Push",
+                        "exercises": [
+                            {"name": "Жим штанги лёжа", "sets": week_info["sets"], "reps": week_info["reps_range"]},
+                            {"name": "Армейский жим", "sets": week_info["sets"], "reps": week_info["reps_range"]}
+                        ]
+                    },
+                    {
+                        "day": "Среда",
+                        "type": "Pull",
+                        "exercises": [
+                            {"name": "Подтягивания", "sets": week_info["sets"], "reps": week_info["reps_range"]},
+                            {"name": "Тяга штанги в наклоне", "sets": week_info["sets"], "reps": week_info["reps_range"]}
+                        ]
+                    },
+                    {
+                        "day": "Пятница",
+                        "type": "Legs",
+                        "exercises": [
+                            {"name": "Приседания со штангой", "sets": week_info["sets"], "reps": week_info["reps_range"]},
+                            {"name": "Становая тяга", "sets": week_info["sets"], "reps": week_info["reps_range"]}
+                        ]
+                    }
+                ]
+            }
+            
+            # Рассчитываем целевые веса
+            for day in plan_data["days"]:
+                for ex in day["exercises"]:
+                    one_rm = pr_map.get(ex["name"].lower())
+                    if one_rm:
+                        target_weight = round((one_rm * week_info["intensity_val"]) / 2.5) * 2.5
+                        ex["target_weight"] = target_weight
+                    else:
+                        ex["target_weight"] = "Уточнить"
+
+            # Сохраняем план в БД
+            new_plan = models.WeeklyPlan(
+                user_id=user.id,
+                week_number=next_week_num,
+                week_type=week_info["week_type"],
+                start_date=datetime.now() + timedelta(days=(7 - datetime.now().weekday())),
+                plan_data=plan_data,
+                is_active=1
+            )
+            db.add(new_plan)
+            # Деактивируем старые планы
+            db.query(models.WeeklyPlan).filter(
+                models.WeeklyPlan.user_id == user.id, 
+                models.WeeklyPlan.id != new_plan.id
+            ).update({"is_active": 0})
+            
+            return f"✅ Сгенерирован план на неделю #{next_week_num} ({week_info['name']})."
+            
+    except Exception as e:
+        logger.error(f"Error generating plan: {e}")
+        return f"❌ Ошибка при генерации плана: {str(e)}"
 
 @tool
-def calculate_target_weight(one_rm: float, week_type: str) -> float:
-    """Считает целевой рабочий вес на основе 1RM и типа недели."""
-    intensity_map = {
-        "strength": 0.875,
-        "hypertrophy": 0.725,
-        "volume": 0.625,
-        "deload": 0.50,
-    }
-    intensity = intensity_map.get(week_type, 0.7)
-    raw_weight = one_rm * intensity
-    # Округление до 2.5 кг
-    return round(raw_weight / 2.5) * 2.5
+def get_current_plan_tool(telegram_id: str) -> str:
+    """Возвращает текущий активный план тренировок для пользователя."""
+    with database.db_session() as db:
+        user = crud.get_user_by_telegram_id(db, telegram_id)
+        if not user:
+            return "Пользователь не найден."
+        
+        plan = db.query(models.WeeklyPlan).filter(
+            models.WeeklyPlan.user_id == user.id,
+            models.WeeklyPlan.is_active == 1
+        ).first()
+        
+        if not plan:
+            return "У тебя пока нет активного плана. Используй /plan чтобы сгенерировать его."
+        
+        pd = plan.plan_data
+        res = f"📅 План на неделю #{pd['week_number']} ({pd['week_name']}):\n\n"
+        for day in pd['days']:
+            res += f"🔹 {day['day']} ({day['type']}):\n"
+            for ex in day['exercises']:
+                res += f"  • {ex['name']}: {ex['sets']}x{ex['reps']} @ {ex['target_weight']} кг\n"
+            res += "\n"
+        return res
