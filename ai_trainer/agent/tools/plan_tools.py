@@ -125,6 +125,9 @@ async def generate_weekly_plan_tool(telegram_id: str) -> str:
                 is_active=1
             )
             db.add(new_plan)
+            # Ensure the new_plan is flushed so its ID is available for the filter
+            await db.flush()
+            
             # Deactivate old plans
             await db.execute(
                 sa_update(models.WeeklyPlan)
