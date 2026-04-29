@@ -3,7 +3,7 @@ import operator
 import json
 from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI
-from langchain_community.chat_models import ChatOllama
+from langchain_ollama import ChatOllama
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from loguru import logger
 import os

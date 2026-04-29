@@ -569,8 +569,8 @@ def get_exercise_technique(exercise_name: str) -> str:
 
 ```python
 # rag/knowledge_base.py
-from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import OllamaEmbeddings
+from langchain_chroma import Chroma
+from langchain_ollama import OllamaEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import (
     JSONLoader, PyPDFLoader, DirectoryLoader
@@ -735,8 +735,8 @@ model.save_pretrained_gguf(
 
 ```python
 # agent/memory/long_term.py
-from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import OllamaEmbeddings
+from langchain_chroma import Chroma
+from langchain_ollama import OllamaEmbeddings
 
 class UserMemoryStore:
     def __init__(self, user_id: str):
