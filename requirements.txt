@@ -12,7 +12,9 @@ asyncpg==0.29.0
 # AI & LLM
 chromadb==0.4.24
 langchain==0.1.12
+langchain-chroma>=0.1.0
 langchain-community==0.0.28
+langchain-ollama>=0.2.0
 langchain-openai==0.0.8
 langgraph==0.0.30
 

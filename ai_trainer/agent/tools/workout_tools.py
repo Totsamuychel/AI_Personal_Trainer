@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from loguru import logger
 
 @tool
-async def log_workout_session_tool(
+def log_workout_session_tool(
     telegram_id: str,
     workout_type: str,
     exercises: list[dict],
@@ -16,8 +16,8 @@ async def log_workout_session_tool(
     exercises should be a list of dicts: [{"name": "Bench Press", "sets": 4, "reps": [5,5,5,4], "weight_kg": [80,80,80,80]}]
     """
     try:
-        async with database.db_session() as db:
-            user = await crud.get_user_by_telegram_id(db, telegram_id)
+        with database.sync_db_session() as db:
+            user = crud.get_user_by_telegram_id_sync(db, telegram_id)
             if not user:
                 return "Error: user not found."
             
@@ -27,7 +27,7 @@ async def log_workout_session_tool(
                 "notes": notes
             }
             
-            session = await crud.create_workout_session(db, user.id, workout_data, exercises)
+            session = crud.create_workout_session_sync(db, user.id, workout_data, exercises)
             
             # Update records
             for ex in exercises:
@@ -47,7 +47,7 @@ async def log_workout_session_tool(
                             max_reps_with_max_weight = r
                 
                 if max_weight > 0 and max_reps_with_max_weight > 0:
-                    await crud.update_personal_record(db, user.id, ex['name'], max_weight, max_reps_with_max_weight)
+                    crud.update_personal_record_sync(db, user.id, ex['name'], max_weight, max_reps_with_max_weight)
             
         return f"✅ Workout '{workout_type}' successfully recorded! {len(exercises)} exercises completed."
     except Exception as e:
@@ -55,15 +55,15 @@ async def log_workout_session_tool(
         return f"❌ Error recording workout: {str(e)}"
 
 @tool
-async def get_workout_history_tool(telegram_id: str, last_n: int = 5) -> str:
+def get_workout_history_tool(telegram_id: str, last_n: int = 5) -> str:
     """Returns the user's recent workout history."""
     try:
-        async with database.db_session() as db:
-            user = await crud.get_user_by_telegram_id(db, telegram_id)
+        with database.sync_db_session() as db:
+            user = crud.get_user_by_telegram_id_sync(db, telegram_id)
             if not user:
                 return "User not found."
             
-            history = await crud.get_workout_history(db, user.id, last_n)
+            history = crud.get_workout_history_sync(db, user.id, last_n)
             if not history:
                 return "Workout history is empty."
             

@@ -45,31 +45,27 @@ PERIODIZATION_CYCLE = [
 ]
 
 @tool
-async def generate_weekly_plan_tool(telegram_id: str) -> str:
+def generate_weekly_plan_tool(telegram_id: str) -> str:
     """
     Generates a workout plan for the next week for the user.
     Automatically determines the week type from the cycle (strength/hypertrophy/volume/deload).
     """
     try:
-        async with database.db_session() as db:
-            user = await crud.get_user_by_telegram_id(db, telegram_id)
+        with database.sync_db_session() as db:
+            user = crud.get_user_by_telegram_id_sync(db, telegram_id)
             if not user:
                 return "Error: User not found."
 
             # Determine the next week number
-            result = await db.execute(
-                select(models.WeeklyPlan)
-                .filter(models.WeeklyPlan.user_id == user.id)
-                .order_by(models.WeeklyPlan.week_number.desc())
-            )
-            last_plan = result.scalars().first()
+            last_plan = db.query(models.WeeklyPlan).filter(
+                models.WeeklyPlan.user_id == user.id
+            ).order_by(models.WeeklyPlan.week_number.desc()).first()
             
             next_week_num = (last_plan.week_number + 1) if last_plan else 1
             week_info = PERIODIZATION_CYCLE[(next_week_num - 1) % 4]
             
             # Get records to calculate weights
-            pr_result = await db.execute(select(models.PersonalRecord).filter(models.PersonalRecord.user_id == user.id))
-            prs = pr_result.scalars().all()
+            prs = db.query(models.PersonalRecord).filter(models.PersonalRecord.user_id == user.id).all()
             pr_map = {pr.exercise.lower(): pr.one_rm_est for pr in prs}
             
             # Basic plan structure
@@ -126,14 +122,13 @@ async def generate_weekly_plan_tool(telegram_id: str) -> str:
             )
             db.add(new_plan)
             # Ensure the new_plan is flushed so its ID is available for the filter
-            await db.flush()
+            db.flush()
             
             # Deactivate old plans
-            await db.execute(
-                sa_update(models.WeeklyPlan)
-                .filter(models.WeeklyPlan.user_id == user.id, models.WeeklyPlan.id != new_plan.id)
-                .values(is_active=0)
-            )
+            db.query(models.WeeklyPlan).filter(
+                models.WeeklyPlan.user_id == user.id, 
+                models.WeeklyPlan.id != new_plan.id
+            ).update({"is_active": 0})
             
             return f"✅ Plan generated for week #{next_week_num} ({week_info['name']})."
             
@@ -142,18 +137,17 @@ async def generate_weekly_plan_tool(telegram_id: str) -> str:
         return f"❌ Error generating plan: {str(e)}"
 
 @tool
-async def get_current_plan_tool(telegram_id: str) -> str:
+def get_current_plan_tool(telegram_id: str) -> str:
     """Returns the current active workout plan for the user."""
-    async with database.db_session() as db:
-        user = await crud.get_user_by_telegram_id(db, telegram_id)
+    with database.sync_db_session() as db:
+        user = crud.get_user_by_telegram_id_sync(db, telegram_id)
         if not user:
             return "User not found."
         
-        result = await db.execute(
-            select(models.WeeklyPlan)
-            .filter(models.WeeklyPlan.user_id == user.id, models.WeeklyPlan.is_active == 1)
-        )
-        plan = result.scalars().first()
+        plan = db.query(models.WeeklyPlan).filter(
+            models.WeeklyPlan.user_id == user.id, 
+            models.WeeklyPlan.is_active == 1
+        ).first()
         
         if not plan:
             return "You don't have an active plan yet. Use /plan to generate one."

@@ -53,12 +53,12 @@ def log_nutrition_tool(telegram_id: str, meal_description: str, macros_json: str
             "fat_g": float(data.get("fat", 0))
         }
         
-        with database.db_session() as db:
-            user = crud.get_user_by_telegram_id(db, telegram_id)
+        with database.sync_db_session() as db:
+            user = crud.get_user_by_telegram_id_sync(db, telegram_id)
             if not user:
                 return "Error: User not found."
             
-            crud.create_nutrition_log(db, user.id, nutrition_data)
+            crud.create_nutrition_log_sync(db, user.id, nutrition_data)
             
         return (
             f"✅ Nutrition logged: {nutrition_data['meal_name']}\n"
