@@ -33,6 +33,10 @@ class User(Base):
     injuries        = Column(JSON, default=list) # ["knee pain", ...]
     created_at      = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
+    # Scheduler settings
+    morning_tip_enabled = Column(Integer, default=1) # 1 - enabled, 0 - disabled
+    morning_tip_time    = Column(String, default="08:00") # Format: HH:MM
+    
     workouts        = relationship("WorkoutSession", back_populates="user")
     plans           = relationship("WeeklyPlan", back_populates="user")
     nutrition_logs  = relationship("NutritionLog", back_populates="user")

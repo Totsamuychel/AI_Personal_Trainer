@@ -39,6 +39,27 @@ async def create_user(db: AsyncSession, user_data: dict) -> models.User:
         raise
     return db_user
 
+async def update_user_scheduler_settings(db: AsyncSession, user_id: int, enabled: int, time: str) -> Optional[models.User]:
+    logger.info(f"Updating scheduler settings for user_id: {user_id}, enabled: {enabled}, time: {time}")
+    try:
+        await db.execute(
+            update(models.User)
+            .where(models.User.id == user_id)
+            .values(morning_tip_enabled=enabled, morning_tip_time=time)
+        )
+        await db.commit()
+        result = await db.execute(select(models.User).where(models.User.id == user_id))
+        return result.scalars().first()
+    except Exception as e:
+        logger.error(f"Failed to update user scheduler settings: {e}")
+        await db.rollback()
+        raise
+
+async def get_all_users(db: AsyncSession) -> List[models.User]:
+    logger.debug("Fetching all users")
+    result = await db.execute(select(models.User))
+    return list(result.scalars().all())
+
 # Workout operations
 async def create_workout_session(db: AsyncSession, user_id: int, workout_data: dict, exercises: List[dict]) -> models.WorkoutSession:
     logger.info(f"Creating workout session for user_id: {user_id}, type: {workout_data.get('workout_type')}")
@@ -151,6 +172,10 @@ async def create_nutrition_log(db: AsyncSession, user_id: int, nutrition_data: d
 def get_user_by_telegram_id_sync(db: Session, telegram_id: str) -> Optional[models.User]:
     logger.debug(f"Fetching user by Telegram ID (sync): {telegram_id}")
     return db.query(models.User).filter(models.User.telegram_id == str(telegram_id)).first()
+
+def get_all_users_sync(db: Session) -> List[models.User]:
+    logger.debug("Fetching all users (sync)")
+    return db.query(models.User).all()
 
 def create_workout_session_sync(db: Session, user_id: int, workout_data: dict, exercises: List[dict]) -> models.WorkoutSession:
     logger.info(f"Creating workout session (sync) for user_id: {user_id}, type: {workout_data.get('workout_type')}")
