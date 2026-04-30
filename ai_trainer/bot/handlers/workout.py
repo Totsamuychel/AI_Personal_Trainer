@@ -73,6 +73,9 @@ async def process_reps(message: types.Message, state: FSMContext):
     else:
         # Try to parse comma or space separated
         reps = [int(x.strip()) for x in reps_text.replace(',', ' ').split() if x.strip().isdigit()]
+        if not reps:
+            await message.answer("Я не смог распознать числа. Пожалуйста, введи количество повторений (например, '10, 10, 8')")
+            return
         if len(reps) < sets:
             reps.extend([reps[-1]] * (sets - len(reps)))
     
