@@ -1,4 +1,4 @@
-from typing import TypedDict, Annotated, List, Union
+from typing import TypedDict, Annotated, List, Union, Optional
 import operator
 import json
 from langgraph.graph import StateGraph, END
@@ -24,16 +24,25 @@ class AgentState(TypedDict):
     current_plan: dict
     action_type: str  # workout_log / nutrition_log / plan_gen / tip / analysis
 
+# Singletons
+_llm = None
+_trainer_graph = None
+
 def get_llm():
-    """Retrieve the LLM based on environment configuration."""
+    """Retrieve the LLM based on environment configuration (Singleton)."""
+    global _llm
+    if _llm is not None:
+        return _llm
+        
     provider = os.getenv("LLM_PROVIDER", "ollama")
     if provider == "openai":
-        return ChatOpenAI(model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
+        _llm = ChatOpenAI(model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
     else:
-        return ChatOllama(
+        _llm = ChatOllama(
             model=os.getenv("OLLAMA_MODEL", "llama3.1:8b"),
             base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         )
+    return _llm
 
 async def load_user_profile_node(state: AgentState):
     """Load user profile, personal records, and workout history from the database."""
@@ -106,8 +115,12 @@ async def run_agent_node(state: AgentState):
     
     # Load system prompt from file
     prompt_path = os.path.join(os.path.dirname(__file__), "prompts", "system_prompt.txt")
-    with open(prompt_path, "r", encoding="utf-8") as f:
-        system_prompt_template = f.read()
+    try:
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            system_prompt_template = f.read()
+    except Exception as e:
+        logger.error(f"Failed to load system prompt from {prompt_path}: {e}")
+        system_prompt_template = "You are a fitness assistant. Name: {name}, Goal: {goal}. Context: {retrieved_context}"
     
     system_prompt = system_prompt_template.format(
         name=profile.get('name', 'N/A'),
@@ -130,7 +143,11 @@ async def run_agent_node(state: AgentState):
     return {"messages": [response]}
 
 def build_trainer_graph():
-    """Build and compile the LangGraph workflow for the trainer agent."""
+    """Build and compile the LangGraph workflow for the trainer agent (Singleton)."""
+    global _trainer_graph
+    if _trainer_graph is not None:
+        return _trainer_graph
+        
     workflow = StateGraph(AgentState)
 
     workflow.add_node("load_profile", load_user_profile_node)
@@ -142,4 +159,5 @@ def build_trainer_graph():
     workflow.add_edge("retrieve_context", "agent")
     workflow.add_edge("agent", END)
 
-    return workflow.compile()
+    _trainer_graph = workflow.compile()
+    return _trainer_graph
