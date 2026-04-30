@@ -1,13 +1,17 @@
-from langchain.tools import tool
+﻿from langchain.tools import tool
 from ai_trainer.agent.trainer_agent import get_llm
 from ai_trainer.db import crud, database
+from ai_trainer.sheets.client import SheetsClient
 from langchain_core.prompts import PromptTemplate
 from loguru import logger
 import json
 import re
+import asyncio
+
+sheets = SheetsClient()
 
 @tool
-def calculate_macros_from_text(description: str) -> str:
+async def calculate_macros_from_text(description: str) -> str:
     """
     Calculates macronutrients based on a textual description of food.
     Returns a JSON string with keys: calories, protein, carbs, fat, meal_name.
@@ -21,7 +25,7 @@ def calculate_macros_from_text(description: str) -> str:
     chain = prompt | llm
     
     try:
-        response = chain.invoke({"description": description})
+        response = await llm.ainvoke(prompt.format(description=description))
         content = response.content if hasattr(response, 'content') else str(response)
         
         # Clean up the response to extract JSON
@@ -34,9 +38,9 @@ def calculate_macros_from_text(description: str) -> str:
         return f"Error: {str(e)}"
 
 @tool
-def log_nutrition_tool(telegram_id: str, meal_description: str, macros_json: str) -> str:
+async def log_nutrition_tool(telegram_id: str, meal_description: str, macros_json: str) -> str:
     """
-    Saves nutrition data to the database.
+    Saves nutrition data to the database and Google Sheets.
     Expects macros_json to be a JSON string from calculate_macros_from_text.
     """
     try:
@@ -48,22 +52,35 @@ def log_nutrition_tool(telegram_id: str, meal_description: str, macros_json: str
             "meal_name": data.get("meal_name", "Unknown meal"),
             "description": meal_description,
             "calories": float(data.get("calories", 0)),
-            "protein_g": float(data.get("protein", 0)),
-            "carbs_g": float(data.get("carbs", 0)),
-            "fat_g": float(data.get("fat", 0))
+            "protein": float(data.get("protein", 0)), # Note: SheetsClient expects 'protein'
+            "carbs": float(data.get("carbs", 0)),
+            "fat": float(data.get("fat", 0))
         }
         
-        with database.sync_db_session() as db:
-            user = crud.get_user_by_telegram_id_sync(db, telegram_id)
+        # Database log (using async session)
+        async with database.db_session() as db:
+            user = await crud.get_user_by_telegram_id(db, telegram_id)
             if not user:
                 return "Error: User not found."
             
-            crud.create_nutrition_log_sync(db, user.id, nutrition_data)
+            # Map for DB (which uses protein_g, carbs_g, fat_g)
+            db_data = {
+                "meal_name": nutrition_data["meal_name"],
+                "description": nutrition_data["description"],
+                "calories": nutrition_data["calories"],
+                "protein_g": nutrition_data["protein"],
+                "carbs_g": nutrition_data["carbs"],
+                "fat_g": nutrition_data["fat"]
+            }
+            await crud.create_nutrition_log(db, user.id, db_data)
+            
+            # Sync to Sheets
+            await sheets.log_nutrition(user.name, nutrition_data)
             
         return (
             f"✅ Nutrition logged: {nutrition_data['meal_name']}\n"
             f"🔥 Calories: {nutrition_data['calories']} kcal\n"
-            f"🥩 P: {nutrition_data['protein_g']}g | 🍞 C: {nutrition_data['carbs_g']}g | 🥑 F: {nutrition_data['fat_g']}g"
+            f"🥩 P: {nutrition_data['protein']}g | 🍞 C: {nutrition_data['carbs']}g | 🥑 F: {nutrition_data['fat']}g"
         )
     except Exception as e:
         logger.error(f"Error logging nutrition: {e}")

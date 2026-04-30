@@ -1,18 +1,35 @@
-from typing import TypedDict, Annotated, List, Union, Optional
+﻿from typing import TypedDict, Annotated, List, Union, Optional
 import operator
 import json
+import os
 from langgraph.graph import StateGraph, END
+from langgraph.prebuilt import ToolNode
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage, ToolMessage
 from loguru import logger
-import os
+from sqlalchemy import select
+
 from ai_trainer.db import crud, database, models
 from ai_trainer.rag.knowledge_base import FitnessKnowledgeBase
-from sqlalchemy import select
+
+# Import tools
+from ai_trainer.agent.tools.nutrition_tools import calculate_macros_from_text, log_nutrition_tool
+from ai_trainer.agent.tools.workout_tools import log_workout_session_tool, get_workout_history_tool
+from ai_trainer.agent.tools.plan_tools import generate_weekly_plan_tool, get_current_plan_tool
 
 # Initialize knowledge base
 kb = FitnessKnowledgeBase()
+
+# Define tools list
+tools = [
+    calculate_macros_from_text, 
+    log_nutrition_tool,
+    log_workout_session_tool, 
+    get_workout_history_tool,
+    generate_weekly_plan_tool, 
+    get_current_plan_tool
+]
 
 class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], operator.add]
@@ -42,6 +59,9 @@ def get_llm():
             model=os.getenv("OLLAMA_MODEL", "llama3.1:8b"),
             base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         )
+    
+    # Bind tools to LLM
+    _llm = _llm.bind_tools(tools)
     return _llm
 
 async def load_user_profile_node(state: AgentState):
@@ -86,21 +106,82 @@ async def load_user_profile_node(state: AgentState):
             for w in history
         ]
         
+        # Load current plan
+        plan_result = await db.execute(
+            select(models.WeeklyPlan).filter(models.WeeklyPlan.user_id == user.id, models.WeeklyPlan.is_active == 1)
+        )
+        plan = plan_result.scalars().first()
+        plan_dict = plan.plan_data if plan else {}
+        
         return {
             "user_profile": profile,
             "personal_records": pr_list,
-            "recent_workouts": workout_list
+            "recent_workouts": workout_list,
+            "current_plan": plan_dict
         }
 
 async def retrieve_context_node(state: AgentState):
-    """Retrieves relevant context from the RAG knowledge base."""
-    last_message = state['messages'][-1].content if state['messages'] else ""
+    """Retrieves relevant context from the RAG knowledge base with topic filtering."""
+    last_message = ""
+    for msg in reversed(state['messages']):
+        if isinstance(msg, HumanMessage):
+            last_message = msg.content
+            break
+    
+    if not last_message:
+        return {"retrieved_context": ""}
+
     logger.info(f"Retrieving context for query: {last_message[:50]}...")
-    
-    docs = kb.search(last_message, k=3)
-    context_text = "\n\n".join([doc.page_content for doc in docs])
-    
+
+    # Определяем тему по ключевым словам для более точного поиска
+    topic = _detect_topic(last_message)
+    logger.debug(f"Detected topic: {topic}")
+
+    # Ищем с фильтрацией по теме (3 релевантных чанка)
+    docs = kb.search(last_message, k=3, topic=topic)
+
+    # Форматируем контекст с указанием источника
+    context_parts = []
+    for doc in docs:
+        source    = doc.metadata.get("book_title", doc.metadata.get("source", "База знаний"))
+        author    = doc.metadata.get("author", "")
+        source_label = f"{source} ({author})" if author else source
+        context_parts.append(f"[Источник: {source_label}]\n{doc.page_content}")
+
+    context_text = "\n\n---\n\n".join(context_parts)
     return {"retrieved_context": context_text}
+
+def _detect_topic(query: str) -> str:
+    """Определяет тему запроса по ключевым словам."""
+    query_lower = query.lower()
+
+    nutrition_keywords = [
+        "белок", "протеин", "калори", "питани", "еда", "рацион",
+        "углевод", "жир", "нутриент", "диет", "кало", "protein",
+        "calories", "nutrition", "diet", "carbs", "fat", "macro"
+    ]
+    anatomy_keywords = [
+        "мышц", "анатоми", "сустав", "связк", "боль", "травм",
+        "muscle", "anatomy", "joint", "injury", "pain", "spine"
+    ]
+    training_keywords = [
+        "тренировк", "упражнени", "программ", "подход", "повторени",
+        "силов", "гипертрофи", "workout", "exercise", "sets", "reps",
+        "program", "strength", "hypertrophy", "periodization"
+    ]
+
+    nutrition_score = sum(1 for kw in nutrition_keywords if kw in query_lower)
+    anatomy_score   = sum(1 for kw in anatomy_keywords   if kw in query_lower)
+    training_score  = sum(1 for kw in training_keywords  if kw in query_lower)
+
+    scores = {
+        "nutrition": nutrition_score,
+        "anatomy":   anatomy_score,
+        "training":  training_score,
+    }
+
+    best_topic = max(scores, key=scores.get)
+    return best_topic if scores[best_topic] > 0 else None  # None = без фильтра
 
 async def run_agent_node(state: AgentState):
     """Construct system message with user profile and retrieved context, then invoke the LLM."""
@@ -130,8 +211,9 @@ async def run_agent_node(state: AgentState):
         goal=profile.get('goal', 'N/A'),
         level=profile.get('level', 'N/A'),
         preferred_split=profile.get('preferred_split', 'N/A'),
-        week_type="N/A", # Will be filled from current_plan if needed
+        week_type=plan.get('week_type', 'N/A'),
         injuries=profile.get('injuries', 'None'),
+        telegram_id=state['user_id'],
         personal_records=json.dumps(prs, ensure_ascii=False, indent=2),
         recent_workouts=json.dumps(history, ensure_ascii=False, indent=2),
         current_plan=json.dumps(plan, ensure_ascii=False, indent=2),
@@ -141,6 +223,13 @@ async def run_agent_node(state: AgentState):
     messages = [SystemMessage(content=system_prompt)] + state['messages']
     response = await llm.ainvoke(messages)
     return {"messages": [response]}
+
+def should_continue(state: AgentState):
+    """Determines whether the agent should continue to tools or end the conversation."""
+    last_message = state['messages'][-1]
+    if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
+        return "tools"
+    return END
 
 def build_trainer_graph():
     """Build and compile the LangGraph workflow for the trainer agent (Singleton)."""
@@ -153,11 +242,22 @@ def build_trainer_graph():
     workflow.add_node("load_profile", load_user_profile_node)
     workflow.add_node("retrieve_context", retrieve_context_node)
     workflow.add_node("agent", run_agent_node)
+    workflow.add_node("tools", ToolNode(tools))
 
     workflow.set_entry_point("load_profile")
     workflow.add_edge("load_profile", "retrieve_context")
     workflow.add_edge("retrieve_context", "agent")
-    workflow.add_edge("agent", END)
+    
+    workflow.add_conditional_edges(
+        "agent",
+        should_continue,
+        {
+            "tools": "tools",
+            END: END
+        }
+    )
+    
+    workflow.add_edge("tools", "agent")
 
     _trainer_graph = workflow.compile()
     return _trainer_graph

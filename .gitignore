@@ -21,3 +21,11 @@ build/
 
 *.db
 ai-trainer-494715-a64ab2ac68af.json
+
+# RAG векторная база (пересоздаётся локально)
+ai_trainer/rag/data/chroma_db/
+chroma_fitness_db/
+
+# Книги (большие файлы, не хранить в git)
+ai_trainer/rag/data/books/**/*.pdf
+ai_trainer/rag/data/books/**/*.epub

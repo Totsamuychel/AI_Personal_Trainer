@@ -1,10 +1,12 @@
 from langchain.tools import tool
 from ai_trainer.db import crud, database
-from sqlalchemy.orm import Session
+from ai_trainer.sheets.client import SheetsClient
 from loguru import logger
 
+sheets = SheetsClient()
+
 @tool
-def log_workout_session_tool(
+async def log_workout_session_tool(
     telegram_id: str,
     workout_type: str,
     exercises: list[dict],
@@ -12,12 +14,12 @@ def log_workout_session_tool(
     notes: str = ""
 ) -> str:
     """
-    Records a workout in the database.
+    Records a workout in the database and Google Sheets.
     exercises should be a list of dicts: [{"name": "Bench Press", "sets": 4, "reps": [5,5,5,4], "weight_kg": [80,80,80,80]}]
     """
     try:
-        with database.sync_db_session() as db:
-            user = crud.get_user_by_telegram_id_sync(db, telegram_id)
+        async with database.db_session() as db:
+            user = await crud.get_user_by_telegram_id(db, telegram_id)
             if not user:
                 return "Error: user not found."
             
@@ -27,7 +29,7 @@ def log_workout_session_tool(
                 "notes": notes
             }
             
-            session = crud.create_workout_session_sync(db, user.id, workout_data, exercises)
+            await crud.create_workout_session(db, user.id, workout_data, exercises)
             
             # Update records
             for ex in exercises:
@@ -47,7 +49,13 @@ def log_workout_session_tool(
                             max_reps_with_max_weight = r
                 
                 if max_weight > 0 and max_reps_with_max_weight > 0:
-                    crud.update_personal_record_sync(db, user.id, ex['name'], max_weight, max_reps_with_max_weight)
+                    await crud.update_personal_record(db, user.id, ex['name'], max_weight, max_reps_with_max_weight)
+            
+            # Sync to Sheets
+            await sheets.log_workout(user.name, {
+                "workout_type": workout_type,
+                "exercises": exercises
+            })
             
         return f"✅ Workout '{workout_type}' successfully recorded! {len(exercises)} exercises completed."
     except Exception as e:
@@ -55,15 +63,15 @@ def log_workout_session_tool(
         return f"❌ Error recording workout: {str(e)}"
 
 @tool
-def get_workout_history_tool(telegram_id: str, last_n: int = 5) -> str:
+async def get_workout_history_tool(telegram_id: str, last_n: int = 5) -> str:
     """Returns the user's recent workout history."""
     try:
-        with database.sync_db_session() as db:
-            user = crud.get_user_by_telegram_id_sync(db, telegram_id)
+        async with database.db_session() as db:
+            user = await crud.get_user_by_telegram_id(db, telegram_id)
             if not user:
                 return "User not found."
             
-            history = crud.get_workout_history_sync(db, user.id, last_n)
+            history = await crud.get_workout_history(db, user.id, last_n)
             if not history:
                 return "Workout history is empty."
             
