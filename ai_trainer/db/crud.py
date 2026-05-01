@@ -111,6 +111,102 @@ async def get_workout_history(db: AsyncSession, user_id: int, limit: int = 10) -
     )
     return list(result.scalars().all())
 
+# Progress / Analytics operations
+async def get_exercise_progress(db: AsyncSession, user_id: int, exercise_name: str, limit: int = 50) -> List[models.ExerciseLog]:
+    """Fetches exercise logs for a specific exercise, ordered by date (oldest first)."""
+    logger.debug(f"Fetching exercise progress for user_id {user_id}, exercise: {exercise_name}")
+    result = await db.execute(
+        select(models.ExerciseLog)
+        .join(models.WorkoutSession)
+        .filter(
+            models.WorkoutSession.user_id == user_id,
+            models.ExerciseLog.name == exercise_name
+        )
+        .order_by(models.WorkoutSession.date.asc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+async def get_exercise_progress_with_dates(db: AsyncSession, user_id: int, exercise_name: str, limit: int = 50) -> list:
+    """Fetches exercise logs with their session dates for chart plotting."""
+    logger.debug(f"Fetching exercise progress with dates for user_id {user_id}, exercise: {exercise_name}")
+    from sqlalchemy import func
+    result = await db.execute(
+        select(
+            models.WorkoutSession.date,
+            models.ExerciseLog.name,
+            models.ExerciseLog.sets,
+            models.ExerciseLog.reps,
+            models.ExerciseLog.weight_kg
+        )
+        .join(models.WorkoutSession)
+        .filter(
+            models.WorkoutSession.user_id == user_id,
+            models.ExerciseLog.name == exercise_name
+        )
+        .order_by(models.WorkoutSession.date.asc())
+        .limit(limit)
+    )
+    return list(result.all())
+
+async def get_user_exercises(db: AsyncSession, user_id: int) -> List[str]:
+    """Returns a list of unique exercise names for a user."""
+    logger.debug(f"Fetching exercise list for user_id {user_id}")
+    from sqlalchemy import distinct
+    result = await db.execute(
+        select(distinct(models.ExerciseLog.name))
+        .join(models.WorkoutSession)
+        .filter(models.WorkoutSession.user_id == user_id)
+        .order_by(models.ExerciseLog.name)
+    )
+    return [row[0] for row in result.all()]
+
+async def get_all_personal_records(db: AsyncSession, user_id: int) -> List[models.PersonalRecord]:
+    """Returns all personal records for a user."""
+    logger.debug(f"Fetching all personal records for user_id {user_id}")
+    result = await db.execute(
+        select(models.PersonalRecord)
+        .filter(models.PersonalRecord.user_id == user_id)
+        .order_by(models.PersonalRecord.exercise)
+    )
+    return list(result.scalars().all())
+
+async def get_volume_history(db: AsyncSession, user_id: int, limit: int = 30) -> list:
+    """Fetches workout sessions with total volume (sets * reps * weight) per session."""
+    logger.debug(f"Fetching volume history for user_id {user_id}")
+    result = await db.execute(
+        select(models.WorkoutSession)
+        .filter(models.WorkoutSession.user_id == user_id)
+        .order_by(models.WorkoutSession.date.asc())
+        .limit(limit)
+    )
+    sessions = result.scalars().all()
+    
+    volume_data = []
+    for session in sessions:
+        # Eagerly load exercises
+        ex_result = await db.execute(
+            select(models.ExerciseLog)
+            .filter(models.ExerciseLog.session_id == session.id)
+        )
+        exercises = ex_result.scalars().all()
+        
+        total_volume = 0
+        for ex in exercises:
+            reps_list = ex.reps if isinstance(ex.reps, list) else [0]
+            weights_list = ex.weight_kg if isinstance(ex.weight_kg, list) else [0]
+            for r, w in zip(reps_list, weights_list):
+                total_volume += r * w
+        
+        volume_data.append({
+            "date": session.date,
+            "workout_type": session.workout_type,
+            "total_volume": total_volume,
+            "duration_min": session.duration_min
+        })
+    
+    return volume_data
+
 # Personal Record operations
 async def update_personal_record(db: AsyncSession, user_id: int, exercise: str, weight: float, reps: int) -> models.PersonalRecord:
     one_rm = calculate_1rm(weight, reps)

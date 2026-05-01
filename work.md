@@ -1,4 +1,4 @@
-﻿# 📋 План работ — AI Personal Trainer
+# 📋 План работ — AI Personal Trainer
 
 ## ✅ Выполнено
 - [x] Убрать `test.db` из репо и добавить в `.gitignore`
@@ -28,7 +28,7 @@ RAG (Retrieval-Augmented Generation) — это механизм, при кот�
 
 ## 📋 Будущие задачи
 
-- [ ] Скачать и положить книги по анатомии в `data/books/anatomy/`
-- [ ] Добавить поддержку голосовых сообщений (Whisper API)
-- [ ] Реализовать аналитику прогресса за месяц в виде графиков
-- [ ] Интеграция с Google Calendar для планирования тренировок
+- [x] Скачать и положить книги по анатомии в `data/books/anatomy/`
+- [x] Реализовать аналитику прогресса за месяц в виде графиков (1RM + Volume)
+- [x] Исправить ключи AgentState в agent handler (profile → user_profile, messages → HumanMessage)
+
