@@ -11,6 +11,9 @@ class SettingsStates(StatesGroup):
     main_menu = State()
     setting_time = State()
 
+from ai_trainer.bot.handlers.start import RegistrationStates
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
 @router.message(F.text == "/settings")
 async def cmd_settings(message: types.Message):
     async with database.db_session() as db:
@@ -26,16 +29,32 @@ async def cmd_settings(message: types.Message):
         toggle_text = "Выключить советы" if user.morning_tip_enabled else "Включить советы"
         builder.button(text=toggle_text, callback_data="toggle_tips")
         builder.button(text="Изменить время", callback_data="change_time")
+        builder.button(text="🔄 Перепройти регистрацию", callback_data="restart_registration")
         builder.adjust(1)
         
         text = (
-            "⚙️ **Настройки утренних советов**\n\n"
-            f"Статус: {status}\n"
-            f"Время: {time}\n\n"
-            "Советы приходят каждое утро и содержат персонализированные рекомендации на основе твоего прогресса."
+            "⚙️ **Настройки**\n\n"
+            f"Статус советов: {status}\n"
+            f"Время советов: {time}\n\n"
+            "Вы также можете обновить свои данные (имя, вес, цель), нажав кнопку ниже."
         )
         
         await message.answer(text, reply_markup=builder.as_markup(), parse_mode="Markdown")
+
+@router.callback_query(F.data == "restart_registration")
+async def restart_registration(callback: types.CallbackQuery, state: FSMContext):
+    await state.clear()
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Русский 🇷🇺", callback_data="lang_ru")
+    builder.button(text="English 🇺🇸", callback_data="lang_en")
+    builder.adjust(2)
+    
+    await callback.message.answer(
+        "Начинаем процесс обновления данных.\nВыбери язык интерфейса / Choose your language:",
+        reply_markup=builder.as_markup()
+    )
+    await state.set_state(RegistrationStates.waiting_for_language)
+    await callback.answer()
 
 @router.callback_query(F.data == "toggle_tips")
 async def toggle_tips(callback: types.CallbackQuery):

@@ -32,7 +32,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
     async with database.db_session() as db:
         user = await crud.get_user_by_telegram_id(db, telegram_id)
     
-    if user:
+    # Если пользователь существует и у него уже есть нормальное имя
+    if user and user.name != "User":
         welcome_text = "Привет, {}! С возвращением. Выбери действие в меню ниже."
         if user.language == "en":
             welcome_text = "Hello, {}! Welcome back. Choose an action from the menu below."
@@ -45,13 +46,14 @@ async def cmd_start(message: types.Message, state: FSMContext):
         sheets.setup_spreadsheet()
         await state.clear()
     else:
+        # Если пользователя нет или это временный "User", начинаем регистрацию
         builder = InlineKeyboardBuilder()
         builder.button(text="Русский 🇷🇺", callback_data="lang_ru")
         builder.button(text="English 🇺🇸", callback_data="lang_en")
         builder.adjust(2)
         
         await message.answer(
-            "Привет! Выбери язык интерфейса / Choose your language:",
+            "Привет! Я твой персональный ИИ-тренер. Давай познакомимся.\nВыбери язык интерфейса / Choose your language:",
             reply_markup=builder.as_markup()
         )
         await state.set_state(RegistrationStates.waiting_for_language)
@@ -199,9 +201,9 @@ async def process_goal_callback(callback: types.CallbackQuery, state: FSMContext
     data['telegram_id'] = str(callback.from_user.id)
     
     try:
-        # 1. Создаем пользователя в БД
+        # 1. Синхронизируем пользователя в БД (создание или обновление)
         async with database.db_session() as db:
-            user = await crud.create_user(db, data)
+            user = await crud.upsert_user(db, data)
         
         # 2. Инициализируем Google Sheets
         sheets.setup_spreadsheet()

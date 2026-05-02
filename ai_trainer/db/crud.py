@@ -25,16 +25,27 @@ async def get_user_by_telegram_id(db: AsyncSession, telegram_id: str) -> Optiona
     result = await db.execute(select(models.User).filter(models.User.telegram_id == str(telegram_id)))
     return result.scalars().first()
 
-async def create_user(db: AsyncSession, user_data: dict) -> models.User:
-    logger.info(f"Creating new user with telegram_id: {user_data.get('telegram_id')}")
-    db_user = models.User(**user_data)
-    db.add(db_user)
+async def upsert_user(db: AsyncSession, user_data: dict) -> models.User:
+    """Creates a new user or updates an existing one based on telegram_id."""
+    telegram_id = str(user_data.get('telegram_id'))
+    db_user = await get_user_by_telegram_id(db, telegram_id)
+    
+    if db_user:
+        logger.info(f"Updating existing user with telegram_id: {telegram_id}")
+        for key, value in user_data.items():
+            if hasattr(db_user, key):
+                setattr(db_user, key, value)
+    else:
+        logger.info(f"Creating new user with telegram_id: {telegram_id}")
+        db_user = models.User(**user_data)
+        db.add(db_user)
+        
     try:
         await db.commit()
         await db.refresh(db_user)
-        logger.success(f"User created successfully: ID {db_user.id}")
+        logger.success(f"User synced successfully: ID {db_user.id}")
     except Exception as e:
-        logger.error(f"Failed to create user: {e}")
+        logger.error(f"Failed to sync user: {e}")
         await db.rollback()
         raise
     return db_user
