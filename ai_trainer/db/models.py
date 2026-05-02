@@ -113,3 +113,4 @@ class SystemSettings(Base):
     openai_model    = Column(String, default="gpt-4o-mini")
     embedding_model = Column(String, default="nomic-embed-text")
     updated_at      = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+

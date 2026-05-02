@@ -1,3 +1,3 @@
 $env:PYTHONPATH = "."
 $env:DATABASE_URL = "sqlite+aiosqlite:///./test.db"
-python ai_trainer/bot/main.py
+& "C:\ProgramData\anaconda3\python.exe" ai_trainer/bot/main.py

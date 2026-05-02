@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from ai_trainer.db import crud, database, models
 from pydantic import BaseModel
 from aiogram import Bot
