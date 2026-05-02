@@ -1,5 +1,5 @@
-﻿from langchain.tools import tool
-from ai_trainer.agent.trainer_agent import get_llm
+from langchain.tools import tool
+from ai_trainer.agent.llm import get_llm
 from ai_trainer.db import crud, database
 from ai_trainer.sheets.client import SheetsClient
 from langchain_core.prompts import PromptTemplate

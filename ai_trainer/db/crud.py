@@ -263,6 +263,49 @@ async def create_nutrition_log(db: AsyncSession, user_id: int, nutrition_data: d
         raise
     return db_log
 
+# Weekly Plan operations
+async def get_active_weekly_plan(db: AsyncSession, user_id: int) -> Optional[models.WeeklyPlan]:
+    logger.debug(f"Fetching active weekly plan for user_id {user_id}")
+    result = await db.execute(
+        select(models.WeeklyPlan)
+        .where(models.WeeklyPlan.user_id == user_id, models.WeeklyPlan.is_active == 1)
+        .order_by(models.WeeklyPlan.id.desc())
+    )
+    return result.scalars().first()
+
+# System Settings operations
+async def get_system_settings(db: AsyncSession) -> models.SystemSettings:
+    import os
+    result = await db.execute(select(models.SystemSettings))
+    settings = result.scalars().first()
+    
+    if not settings:
+        # Create default settings if not exists
+        settings = models.SystemSettings(
+            llm_provider=os.getenv("LLM_PROVIDER", "ollama"),
+            ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+            ollama_model=os.getenv("OLLAMA_MODEL", "llama3.1:8b"),
+            openai_api_key=os.getenv("OPENAI_API_KEY"),
+            openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            embedding_model=os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+        )
+        db.add(settings)
+        await db.commit()
+        await db.refresh(settings)
+        
+    return settings
+
+async def update_system_settings(db: AsyncSession, settings_data: dict) -> models.SystemSettings:
+    settings = await get_system_settings(db)
+    
+    for key, value in settings_data.items():
+        if hasattr(settings, key):
+            setattr(settings, key, value)
+            
+    await db.commit()
+    await db.refresh(settings)
+    return settings
+
 # --- Sync Operations ---
 
 def get_user_by_telegram_id_sync(db: Session, telegram_id: str) -> Optional[models.User]:
@@ -356,3 +399,4 @@ def create_nutrition_log_sync(db: Session, user_id: int, nutrition_data: dict) -
         db.rollback()
         raise
     return db_log
+

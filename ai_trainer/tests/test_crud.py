@@ -1,7 +1,7 @@
 import pytest
 from ai_trainer.db import crud, models
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_create_user(db_session):
     user_data = {
         "telegram_id": "12345",
@@ -16,7 +16,7 @@ async def test_create_user(db_session):
     db_user = await crud.get_user_by_telegram_id(db_session, "12345")
     assert db_user.id == user.id
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_create_workout(db_session):
     # Setup user
     user = await crud.create_user(db_session, {"telegram_id": "67890", "name": "Athlete"})
@@ -36,6 +36,16 @@ async def test_create_workout(db_session):
     
     session = await crud.create_workout_session(db_session, user.id, workout_data, exercises)
     assert session.id is not None
+    
+    # Refresh with exercises to avoid lazy loading error
+    from sqlalchemy.orm import selectinload
+    from sqlalchemy import select
+    from ai_trainer.db import models
+    
+    stmt = select(models.WorkoutSession).where(models.WorkoutSession.id == session.id).options(selectinload(models.WorkoutSession.exercises))
+    result = await db_session.execute(stmt)
+    session = result.scalar_one()
+    
     assert len(session.exercises) == 1
     assert session.exercises[0].name == "Bench Press"
 

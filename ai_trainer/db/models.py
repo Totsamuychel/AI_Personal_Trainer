@@ -101,4 +101,15 @@ class NutritionLog(Base):
     carbs_g      = Column(Float)
     fat_g        = Column(Float)
     
-    user         = relationship("User", back_populates="nutrition_logs")
+    user        = relationship("User", back_populates="nutrition_logs")
+
+class SystemSettings(Base):
+    __tablename__ = "system_settings"
+    id              = Column(Integer, primary_key=True)
+    llm_provider    = Column(String, default="ollama")  # ollama / openai
+    ollama_base_url = Column(String, default="http://localhost:11434")
+    ollama_model    = Column(String, default="gpt-oss:20b ")
+    openai_api_key  = Column(String)
+    openai_model    = Column(String, default="gpt-4o-mini")
+    embedding_model = Column(String, default="nomic-embed-text")
+    updated_at      = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

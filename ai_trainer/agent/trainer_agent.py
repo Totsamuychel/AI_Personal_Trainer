@@ -1,4 +1,4 @@
-﻿from typing import TypedDict, Annotated, List, Union, Optional
+from typing import TypedDict, Annotated, List, Union, Optional
 import operator
 import json
 import os
@@ -12,6 +12,7 @@ from sqlalchemy import select
 
 from ai_trainer.db import crud, database, models
 from ai_trainer.rag.knowledge_base import FitnessKnowledgeBase
+from ai_trainer.agent.llm import get_llm
 
 # Import tools
 from ai_trainer.agent.tools.nutrition_tools import calculate_macros_from_text, log_nutrition_tool
@@ -42,27 +43,12 @@ class AgentState(TypedDict):
     action_type: str  # workout_log / nutrition_log / plan_gen / tip / analysis
 
 # Singletons
-_llm = None
 _trainer_graph = None
 
-def get_llm():
-    """Retrieve the LLM based on environment configuration (Singleton)."""
-    global _llm
-    if _llm is not None:
-        return _llm
-        
-    provider = os.getenv("LLM_PROVIDER", "ollama")
-    if provider == "openai":
-        _llm = ChatOpenAI(model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
-    else:
-        _llm = ChatOllama(
-            model=os.getenv("OLLAMA_MODEL", "llama3.1:8b"),
-            base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-        )
-    
-    # Bind tools to LLM
-    _llm = _llm.bind_tools(tools)
-    return _llm
+def get_bound_llm():
+    """Retrieve the LLM bound with tools."""
+    llm = get_llm()
+    return llm.bind_tools(tools)
 
 async def load_user_profile_node(state: AgentState):
     """Load user profile, personal records, and workout history from the database."""

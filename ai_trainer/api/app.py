@@ -1,13 +1,27 @@
 from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from ai_trainer.db import crud, database
+from ai_trainer.api.routes import admin
 
 app = FastAPI(
     title="AI Personal Trainer API",
     description="REST API for the AI Personal Trainer application",
     version="1.0.0"
 )
+
+# CORS Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify your frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Register routes
+app.include_router(admin.router)
 
 # Dependency
 async def get_db():

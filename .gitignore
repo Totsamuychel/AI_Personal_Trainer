@@ -29,3 +29,13 @@ chroma_fitness_db/
 # Книги (большие файлы, не хранить в git)
 ai_trainer/rag/data/books/**/*.pdf
 ai_trainer/rag/data/books/**/*.epub
+
+# Frontend
+admin_frontend/node_modules/
+admin_frontend/dist/
+admin_frontend/.env
+admin_frontend/.env.local
+
+# IDE
+.vscode/
+.idea/
