@@ -5,7 +5,6 @@ from typing import Optional
 
 from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_community.document_loaders import PyPDFLoader
 from dotenv import load_dotenv
@@ -16,10 +15,6 @@ load_dotenv()
 # Папка с книгами относительно корня проекта
 BOOKS_DIR = Path(__file__).parent / "data" / "books"
 CHROMA_DIR = Path(__file__).parent / "data" / "chroma_db"
-
-# Размер чанков — баланс между контекстом и точностью поиска
-CHUNK_SIZE    = 500   # уменьшено для стабильности
-CHUNK_OVERLAP = 50    # уменьшено пропорционально
 
 
 class FitnessKnowledgeBase:
@@ -33,20 +28,18 @@ class FitnessKnowledgeBase:
             persist_directory=persist_dir or str(CHROMA_DIR),
             embedding_function=self.embeddings
         )
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=CHUNK_SIZE,
-            chunk_overlap=CHUNK_OVERLAP,
-            length_function=len,
-        )
 
     # ─────────────────────────────────────────────
-    # Загрузка PDF книги
+    # Загрузка PDF книги (Постранично)
     # ─────────────────────────────────────────────
 
     def load_pdf_book(self, pdf_path: str, topic: str = "general", metadata: dict = None):
         """
-        Загружает PDF книгу, разбивает на чанки и индексирует в ChromaDB.
+        Загружает PDF книгу постранично и индексирует в ChromaDB.
+        Если страница слишком большая (>1500 симв.), она разбивается на части для совместимости с моделью.
         """
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
+        
         path = Path(pdf_path)
         if not path.exists():
             logger.error(f"PDF не найден: {pdf_path}")
@@ -55,27 +48,57 @@ class FitnessKnowledgeBase:
         logger.info(f"Загрузка PDF: {path.name} (тема: {topic})")
 
         loader = PyPDFLoader(str(path))
-        pages  = loader.load()   # каждый элемент = одна страница
+        pages  = loader.load()
 
-        # Разбиваем на чанки
-        chunks = self.text_splitter.split_documents(pages)
-
-        # Добавляем метаданные к каждому чанку
         book_name = metadata.get("title", path.stem) if metadata else path.stem
         author    = metadata.get("author", "Unknown") if metadata else "Unknown"
 
-        for i, chunk in enumerate(chunks):
-            chunk.metadata.update({
-                "source":       path.name,
-                "book_title":   book_name,
-                "author":       author,
-                "topic":        topic,
-                "chunk_index":  i,
-                "type":         "book_pdf",
-            })
+        # Лимит для mxbai-embed-large (512 токенов ~ 1500-2000 символов)
+        MAX_PAGE_CHARS = 1500
+        fallback_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=MAX_PAGE_CHARS,
+            chunk_overlap=200,
+            length_function=len,
+        )
 
-        self.vectorstore.add_documents(chunks)
-        logger.success(f"Проиндексировано {len(chunks)} чанков из '{book_name}'")
+        docs = []
+        for page in pages:
+            content = page.page_content.replace('\x00', '').strip()
+            if len(content) < 150:
+                continue
+
+            # Если страница превышает лимит модели, бьем её на части
+            if len(content) > MAX_PAGE_CHARS:
+                page.page_content = content
+                sub_chunks = fallback_splitter.split_documents([page])
+                for i, chunk in enumerate(sub_chunks):
+                    chunk.metadata.update({
+                        "source":       path.name,
+                        "book_title":   book_name,
+                        "author":       author,
+                        "topic":        topic,
+                        "page_number":  page.metadata.get("page", 0) + 1,
+                        "part":         i + 1,
+                        "type":         "book_page_part",
+                    })
+                    docs.append(chunk)
+            else:
+                page.page_content = content
+                page.metadata.update({
+                    "source":       path.name,
+                    "book_title":   book_name,
+                    "author":       author,
+                    "topic":        topic,
+                    "page_number":  page.metadata.get("page", 0) + 1,
+                    "type":         "book_page",
+                })
+                docs.append(page)
+
+        if docs:
+            self.vectorstore.add_documents(docs)
+            logger.success(f"Проиндексировано {len(docs)} элементов из '{book_name}'")
+        else:
+            logger.warning(f"В книге '{book_name}' не найдено контента для индексации")
 
     # ─────────────────────────────────────────────
     # Загрузка всех книг из папки автоматически
