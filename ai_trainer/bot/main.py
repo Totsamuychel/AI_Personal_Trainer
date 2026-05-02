@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-from ai_trainer.bot.handlers import start, workout, agent, settings, progress, nutrition, plan, tips
+from ai_trainer.bot.handlers import start, menu, workout, agent, settings, progress, nutrition, plan, tips
 from ai_trainer.scheduler.tips_scheduler import setup_scheduler
 
 load_dotenv()
@@ -30,6 +30,7 @@ async def main():
 
     # Register routers
     dp.include_router(start.router)
+    dp.include_router(menu.router)
     dp.include_router(workout.router)
     dp.include_router(settings.router)
     dp.include_router(progress.router)

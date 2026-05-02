@@ -55,3 +55,22 @@ async def update_admin_settings(update_data: SettingsUpdate, db: AsyncSession = 
     data = {k: v for k, v in update_data.model_dump().items() if v is not None}
     settings = await crud.update_system_settings(db, data)
     return settings
+
+@router.get("/users/{user_id}/stats")
+async def get_user_stats(user_id: int, db: AsyncSession = Depends(get_db)):
+    # Get volume history
+    volume_history = await crud.get_volume_history(db, user_id, limit=30)
+    return {
+        "volume_history": volume_history
+    }
+
+@router.get("/users/{user_id}/nutrition")
+async def get_user_nutrition(user_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(models.NutritionLog)
+        .filter(models.NutritionLog.user_id == user_id)
+        .order_by(models.NutritionLog.date.desc())
+        .limit(50)
+    )
+    logs = result.scalars().all()
+    return logs

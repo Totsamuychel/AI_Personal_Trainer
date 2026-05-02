@@ -23,6 +23,8 @@ MIN_AGE, MAX_AGE = 12, 100
 MIN_HEIGHT, MAX_HEIGHT = 100, 250
 MIN_WEIGHT, MAX_WEIGHT = 30, 250
 
+from ai_trainer.bot.keyboards.main_menu import get_main_menu
+
 @router.message(CommandStart())
 async def cmd_start(message: types.Message, state: FSMContext):
     telegram_id = str(message.from_user.id)
@@ -31,11 +33,14 @@ async def cmd_start(message: types.Message, state: FSMContext):
         user = await crud.get_user_by_telegram_id(db, telegram_id)
     
     if user:
-        welcome_text = "Привет, {}! С возвращением. Используй /workout чтобы начать тренировку."
+        welcome_text = "Привет, {}! С возвращением. Выбери действие в меню ниже."
         if user.language == "en":
-            welcome_text = "Hello, {}! Welcome back. Use /workout to start a training session."
+            welcome_text = "Hello, {}! Welcome back. Choose an action from the menu below."
             
-        await message.answer(welcome_text.format(user.name))
+        await message.answer(
+            welcome_text.format(user.name),
+            reply_markup=get_main_menu(user.language)
+        )
         # Ensure spreadsheet is ready
         sheets.setup_spreadsheet()
         await state.clear()
@@ -199,12 +204,13 @@ async def process_goal_callback(callback: types.CallbackQuery, state: FSMContext
         # Text for feedback
         if lang == "ru":
             goals_text = {"strength": "Сила", "hypertrophy": "Гипертрофия", "fat_loss": "Похудение"}
-            success_msg = f"Цель выбрана: {goals_text.get(goal)}\nОтлично! Профиль создан. Теперь ты можешь использовать /workout для записи тренировок."
+            success_msg = f"Цель выбрана: {goals_text.get(goal)}\nОтлично! Профиль создан. Используй меню ниже для управления тренировками."
         else:
             goals_text = {"strength": "Strength", "hypertrophy": "Hypertrophy", "fat_loss": "Fat Loss"}
-            success_msg = f"Goal selected: {goals_text.get(goal)}\nGreat! Profile created. Now you can use /workout to record training sessions."
+            success_msg = f"Goal selected: {goals_text.get(goal)}\nGreat! Profile created. Use the menu below to manage your training."
         
         await callback.message.edit_text(success_msg)
+        await callback.message.answer("Меню активировано:", reply_markup=get_main_menu(lang))
         await callback.answer()
     except Exception as e:
         logger.error(f"Error creating user: {e}")

@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-import { MessageSquare, Send } from 'lucide-vue-next'
+import { MessageSquare, Send, BarChart2 } from 'lucide-vue-next'
+import UserStats from './UserStats.vue'
 
 const API_BASE = 'http://localhost:8000/admin'
 const users = ref<any[]>([])
 const loading = ref(true)
 const selectedUser = ref<any>(null)
+const viewingStats = ref<any>(null)
 const messageText = ref('')
 const sending = ref(false)
 
@@ -25,6 +27,10 @@ const fetchUsers = async () => {
 const openMessageModal = (user: any) => {
   selectedUser.value = user
   messageText.value = ''
+}
+
+const showStats = (user: any) => {
+  viewingStats.value = user
 }
 
 const sendMessage = async () => {
@@ -49,7 +55,11 @@ onMounted(fetchUsers)
 </script>
 
 <template>
-  <div class="bg-white rounded-xl shadow-md overflow-hidden">
+  <div v-if="viewingStats">
+    <UserStats :user="viewingStats" @back="viewingStats = null" />
+  </div>
+  
+  <div v-else class="bg-white rounded-xl shadow-md overflow-hidden">
     <div class="p-4 border-b bg-gray-50 flex justify-between items-center">
       <h2 class="text-xl font-semibold">База пользователей</h2>
       <button @click="fetchUsers" class="text-sm text-indigo-600 hover:underline">Обновить</button>
@@ -75,18 +85,26 @@ onMounted(fetchUsers)
         </tr>
       </thead>
       <tbody>
-        <tr v-for="user in users" :key="user.id" class="border-t hover:bg-gray-50">
+        <tr v-for="user in users" :key="user.id" class="border-t hover:bg-gray-50 transition cursor-pointer" @click="showStats(user)">
           <td class="p-4">{{ user.id }}</td>
           <td class="p-4 font-medium">{{ user.name }}</td>
           <td class="p-4 font-mono text-sm">{{ user.telegram_id }}</td>
-          <td class="p-4">{{ user.goal }}</td>
+          <td class="p-4 capitalize">{{ user.goal }}</td>
           <td class="p-4 capitalize">{{ user.level }}</td>
-          <td class="p-4 text-center">
+          <td class="p-4 text-center flex justify-center gap-2">
             <button 
-              @click="openMessageModal(user)"
-              class="bg-indigo-100 text-indigo-700 p-2 rounded-lg hover:bg-indigo-200 transition flex items-center gap-2 mx-auto"
+              @click.stop="showStats(user)"
+              class="bg-indigo-100 text-indigo-700 p-2 rounded-lg hover:bg-indigo-200 transition"
+              title="Статистика"
             >
-              <MessageSquare :size="16" /> Написать
+              <BarChart2 :size="18" />
+            </button>
+            <button 
+              @click.stop="openMessageModal(user)"
+              class="bg-green-100 text-green-700 p-2 rounded-lg hover:bg-green-200 transition"
+              title="Написать"
+            >
+              <MessageSquare :size="18" />
             </button>
           </td>
         </tr>

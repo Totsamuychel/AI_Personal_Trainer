@@ -13,6 +13,7 @@ from sqlalchemy import select
 from ai_trainer.db import crud, database, models
 from ai_trainer.rag.knowledge_base import FitnessKnowledgeBase
 from ai_trainer.agent.llm import get_llm
+from ai_trainer.agent.memory.long_term import UserMemoryStore
 
 # Import tools
 from ai_trainer.agent.tools.nutrition_tools import calculate_macros_from_text, log_nutrition_tool
@@ -39,6 +40,7 @@ class AgentState(TypedDict):
     personal_records: List[dict]
     recent_workouts: List[dict]
     retrieved_context: str
+    user_memories: List[str]
     current_plan: dict
     action_type: str  # workout_log / nutrition_log / plan_gen / tip / analysis
 
@@ -107,7 +109,7 @@ async def load_user_profile_node(state: AgentState):
         }
 
 async def retrieve_context_node(state: AgentState):
-    """Retrieves relevant context from the RAG knowledge base with topic filtering."""
+    """Retrieves context from RAG (books) and User Memory (personal facts)."""
     last_message = ""
     for msg in reversed(state['messages']):
         if isinstance(msg, HumanMessage):
@@ -115,27 +117,34 @@ async def retrieve_context_node(state: AgentState):
             break
     
     if not last_message:
-        return {"retrieved_context": ""}
+        return {"retrieved_context": "", "user_memories": []}
 
-    logger.info(f"Retrieving context for query: {last_message[:50]}...")
+    logger.info(f"Retrieving context and memory for user {state['user_id']}")
 
-    # Определяем тему по ключевым словам для более точного поиска
+    # 1. Поиск по общей базе знаний (RAG)
     topic = _detect_topic(last_message)
-    logger.debug(f"Detected topic: {topic}")
+    docs = kb.search(last_message, k=2, topic=topic)
 
-    # Ищем с фильтрацией по теме (3 релевантных чанка)
-    docs = kb.search(last_message, k=3, topic=topic)
-
-    # Форматируем контекст с указанием источника
     context_parts = []
     for doc in docs:
         source    = doc.metadata.get("book_title", doc.metadata.get("source", "База знаний"))
+        page_num  = doc.metadata.get("page_number", "")
         author    = doc.metadata.get("author", "")
+        
         source_label = f"{source} ({author})" if author else source
+        if page_num:
+            source_label += f" [стр. {page_num}]"
+            
         context_parts.append(f"[Источник: {source_label}]\n{doc.page_content}")
 
-    context_text = "\n\n---\n\n".join(context_parts)
-    return {"retrieved_context": context_text}
+    # 2. Поиск по памяти пользователя
+    memory_store = UserMemoryStore(state['user_id'])
+    memories = memory_store.recall(last_message, k=3)
+
+    return {
+        "retrieved_context": "\n\n---\n\n".join(context_parts),
+        "user_memories": memories
+    }
 
 def _detect_topic(query: str) -> str:
     """Определяет тему запроса по ключевым словам."""
@@ -171,13 +180,14 @@ def _detect_topic(query: str) -> str:
 
 async def run_agent_node(state: AgentState):
     """Construct system message with user profile and retrieved context, then invoke the LLM."""
-    llm = get_llm()
+    llm = get_bound_llm()
     
     # Construct system message with user profile
     profile = state.get('user_profile', {})
     prs = state.get('personal_records', [])
     history = state.get('recent_workouts', [])
     context = state.get('retrieved_context', "")
+    memories = state.get('user_memories', [])
     plan = state.get('current_plan', {})
     
     # Load system prompt from file
@@ -187,8 +197,11 @@ async def run_agent_node(state: AgentState):
             system_prompt_template = f.read()
     except Exception as e:
         logger.error(f"Failed to load system prompt from {prompt_path}: {e}")
-        system_prompt_template = "You are a fitness assistant. Name: {name}, Goal: {goal}. Context: {retrieved_context}"
+        system_prompt_template = "You are a fitness assistant. Name: {name}, Goal: {goal}. Context: {retrieved_context}. Memories: {user_memories}"
     
+    # Форматируем персональные факты
+    memories_text = "\n".join([f"- {m}" for m in memories]) if memories else "Нет сохраненных фактов."
+
     system_prompt = system_prompt_template.format(
         name=profile.get('name', 'N/A'),
         age=profile.get('age', 'N/A'),
@@ -203,7 +216,8 @@ async def run_agent_node(state: AgentState):
         personal_records=json.dumps(prs, ensure_ascii=False, indent=2),
         recent_workouts=json.dumps(history, ensure_ascii=False, indent=2),
         current_plan=json.dumps(plan, ensure_ascii=False, indent=2),
-        retrieved_context=context
+        retrieved_context=context,
+        user_memories=memories_text
     )
     
     messages = [SystemMessage(content=system_prompt)] + state['messages']
@@ -215,7 +229,25 @@ def should_continue(state: AgentState):
     last_message = state['messages'][-1]
     if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
         return "tools"
-    return END
+    return "store_memory"
+
+async def store_memory_node(state: AgentState):
+    """Extract and save new facts from the conversation."""
+    # Берем последние 2-3 сообщения для анализа
+    conv_history = ""
+    for msg in state['messages'][-3:]:
+        role = "User" if isinstance(msg, HumanMessage) else "Assistant"
+        content = msg.content if isinstance(msg.content, str) else str(msg.content)
+        conv_history += f"{role}: {content}\n"
+    
+    logger.info(f"Extracting memories for user {state['user_id']}")
+    memory_store = UserMemoryStore(state['user_id'])
+    
+    # Используем get_llm() напрямую для анализа (без инструментов)
+    llm = get_llm()
+    memory_store.extract_and_save_facts(conv_history, llm)
+    
+    return state
 
 def build_trainer_graph():
     """Build and compile the LangGraph workflow for the trainer agent (Singleton)."""
@@ -229,6 +261,7 @@ def build_trainer_graph():
     workflow.add_node("retrieve_context", retrieve_context_node)
     workflow.add_node("agent", run_agent_node)
     workflow.add_node("tools", ToolNode(tools))
+    workflow.add_node("store_memory", store_memory_node)
 
     workflow.set_entry_point("load_profile")
     workflow.add_edge("load_profile", "retrieve_context")
@@ -239,11 +272,12 @@ def build_trainer_graph():
         should_continue,
         {
             "tools": "tools",
-            END: END
+            "store_memory": "store_memory"
         }
     )
     
     workflow.add_edge("tools", "agent")
+    workflow.add_edge("store_memory", END)
 
     _trainer_graph = workflow.compile()
     return _trainer_graph
