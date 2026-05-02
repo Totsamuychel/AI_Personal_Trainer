@@ -284,7 +284,7 @@ async def get_system_settings(db: AsyncSession) -> models.SystemSettings:
         settings = models.SystemSettings(
             llm_provider=os.getenv("LLM_PROVIDER", "ollama"),
             ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-            ollama_model=os.getenv("OLLAMA_MODEL", "llama3.1:8b"),
+            ollama_model=os.getenv("OLLAMA_MODEL", "gpt-oss20b"),
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             embedding_model=os.getenv("EMBEDDING_MODEL", "nomic-embed-text")

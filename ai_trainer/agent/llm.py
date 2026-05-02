@@ -21,7 +21,7 @@ def get_llm():
             if not settings:
                 # Fallback to env or create defaults if table is empty
                 provider = os.getenv("LLM_PROVIDER", "ollama")
-                model = os.getenv("OPENAI_MODEL", "gpt-4o-mini") if provider == "openai" else os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+                model = os.getenv("OPENAI_MODEL", "gpt-4o-mini") if provider == "openai" else os.getenv("OLLAMA_MODEL", "gpt-oss20b")
                 base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
             else:
                 provider = settings.llm_provider
@@ -55,7 +55,7 @@ def get_llm():
             _llm = ChatOpenAI(model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
         else:
             _llm = ChatOllama(
-                model=os.getenv("OLLAMA_MODEL", "llama3.1:8b"),
+                model=os.getenv("OLLAMA_MODEL", "gpt-oss20b"),
                 base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
             )
 

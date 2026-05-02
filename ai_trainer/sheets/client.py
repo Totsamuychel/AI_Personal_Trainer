@@ -36,9 +36,13 @@ class SheetsClient:
 
     def get_spreadsheet(self, spreadsheet_id: str = None):
         sid = spreadsheet_id or self.spreadsheet_id
-        if not self.client or not sid:
-            logger.error("Sheets client not authenticated or Spreadsheet ID missing")
+        if not self.client:
             return None
+            
+        if not sid or "your_template_spreadsheet_id" in sid or sid.strip() == "":
+            logger.warning("Google Spreadsheet ID not configured. Skipping sheets integration.")
+            return None
+            
         try:
             return self.client.open_by_key(sid)
         except Exception as e:
