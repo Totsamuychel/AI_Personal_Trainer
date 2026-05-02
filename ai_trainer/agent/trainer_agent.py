@@ -184,7 +184,7 @@ def _detect_topic(query: str) -> str:
     return best_topic if scores[best_topic] > 0 else None  # None = без фильтра
 
 async def run_agent_node(state: AgentState):
-    """Construct system message and invoke LLM with error handling."""
+    """Construct system message and invoke LLM with robust error handling."""
     try:
         logger.info(f"NODE: Running agent for user {state['user_id']}")
         llm = get_bound_llm()
@@ -201,40 +201,45 @@ async def run_agent_node(state: AgentState):
         prompt_path = os.path.join(os.path.dirname(__file__), "prompts", "system_prompt.txt")
         try:
             with open(prompt_path, "r", encoding="utf-8") as f:
-                system_prompt_template = f.read()
+                template = f.read()
         except Exception as e:
             logger.error(f"Failed to load system prompt: {e}")
-            system_prompt_template = "You are a fitness assistant. Profile: {name}. Context: {retrieved_context}. Memories: {user_memories}"
+            template = "You are a fitness assistant. Profile: {name}. Context: {retrieved_context}. Memories: {user_memories}"
         
-        # Форматируем персональные факты
-        memories_text = "\n".join([f"- {m}" for m in memories]) if memories else "Нет сохраненных фактов."
+        # Безопасное форматирование промпта (защита от KeyError из-за лишних скобок в тексте)
+        variables = {
+            "name": profile.get('name', 'N/A'),
+            "age": profile.get('age', 'N/A'),
+            "height": profile.get('height', 'N/A'),
+            "weight": profile.get('weight', 'N/A'),
+            "goal": profile.get('goal', 'N/A'),
+            "level": profile.get('level', 'N/A'),
+            "preferred_split": profile.get('preferred_split', 'N/A'),
+            "week_type": plan.get('week_type', 'N/A'),
+            "injuries": profile.get('injuries', 'None'),
+            "telegram_id": state['user_id'],
+            "personal_records": json.dumps(prs, ensure_ascii=False, indent=2),
+            "recent_workouts": json.dumps(history, ensure_ascii=False, indent=2),
+            "current_plan": json.dumps(plan, ensure_ascii=False, indent=2),
+            "retrieved_context": context,
+            "user_memories": "\n".join([f"- {m}" for m in memories]) if memories else "Нет сохраненных фактов."
+        }
+        
+        # Используем ручную замену для предотвращения KeyError при наличии лишних {} в шаблоне
+        system_prompt = template
+        for key, value in variables.items():
+            system_prompt = system_prompt.replace("{" + key + "}", str(value))
 
-        system_prompt = system_prompt_template.format(
-            name=profile.get('name', 'N/A'),
-            age=profile.get('age', 'N/A'),
-            height=profile.get('height', 'N/A'),
-            weight=profile.get('weight', 'N/A'),
-            goal=profile.get('goal', 'N/A'),
-            level=profile.get('level', 'N/A'),
-            preferred_split=profile.get('preferred_split', 'N/A'),
-            week_type=plan.get('week_type', 'N/A'),
-            injuries=profile.get('injuries', 'None'),
-            telegram_id=state['user_id'],
-            personal_records=json.dumps(prs, ensure_ascii=False, indent=2),
-            recent_workouts=json.dumps(history, ensure_ascii=False, indent=2),
-            current_plan=json.dumps(plan, ensure_ascii=False, indent=2),
-            retrieved_context=context,
-            user_memories=memories_text
-        )
-        
         messages = [SystemMessage(content=system_prompt)] + state['messages']
         logger.info("Invoking LLM...")
         response = await llm.ainvoke(messages)
         logger.info("LLM response received")
         return {"messages": [response]}
     except Exception as e:
-        logger.error(f"Error in run_agent_node: {e}")
-        return {"messages": [AIMessage(content="Извини, у меня возникла ошибка при генерации ответа. Попробуй еще раз.")]}
+        logger.error(f"CRITICAL ERROR in run_agent_node: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {"messages": [AIMessage(content="Извини, у меня возникла техническая проблема при генерации ответа. Пожалуйста, попробуй еще раз через минуту.")]}
 
 def should_continue(state: AgentState):
     """Determines whether the agent should continue to tools or end the conversation."""

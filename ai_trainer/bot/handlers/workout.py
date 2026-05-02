@@ -10,7 +10,10 @@ router = Router()
 sheets = SheetsClient()
 
 class WorkoutStates(StatesGroup):
+    waiting_for_feeling = State() # Как самочувствие?
+    waiting_for_pain = State()    # Есть ли боли?
     choosing_type = State()
+    # ... (rest of states)
     logging_exercise = State()
     entering_sets = State()
     entering_weight = State()
@@ -20,6 +23,19 @@ class WorkoutStates(StatesGroup):
 
 @router.message(F.text == "/workout")
 async def cmd_workout(message: types.Message, state: FSMContext):
+    await message.answer("Прежде чем начнем, как твое самочувствие сегодня? (устал/бодр/нормально)")
+    await state.set_state(WorkoutStates.waiting_for_feeling)
+
+@router.message(WorkoutStates.waiting_for_feeling)
+async def process_feeling(message: types.Message, state: FSMContext):
+    await state.update_data(feeling=message.text)
+    await message.answer("Есть ли какие-то боли или дискомфорт в суставах/мышцах?")
+    await state.set_state(WorkoutStates.waiting_for_pain)
+
+@router.message(WorkoutStates.waiting_for_pain)
+async def process_pain(message: types.Message, state: FSMContext):
+    await state.update_data(pain=message.text)
+    
     builder = ReplyKeyboardBuilder()
     builder.button(text="Push")
     builder.button(text="Pull")
@@ -27,7 +43,7 @@ async def cmd_workout(message: types.Message, state: FSMContext):
     builder.button(text="Full Body")
     builder.adjust(2)
     
-    await message.answer("Выбери тип тренировки:", reply_markup=builder.as_markup(resize_keyboard=True))
+    await message.answer("Понял. Теперь выбери тип тренировки:", reply_markup=builder.as_markup(resize_keyboard=True))
     await state.set_state(WorkoutStates.choosing_type)
 
 @router.message(WorkoutStates.choosing_type)
