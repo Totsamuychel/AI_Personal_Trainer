@@ -16,23 +16,23 @@ async def menu_nutrition(message: types.Message, state: FSMContext):
     await cmd_nutrition(message, state)
 
 @router.message(F.text.in_(["📈 Прогресс", "📈 Progress"]))
-async def menu_progress(message: types.Message, state: FSMContext):
+async def menu_progress(message: types.Message):
     from ai_trainer.bot.handlers.progress import cmd_progress
-    await cmd_progress(message, state)
+    await cmd_progress(message)
 
 @router.message(F.text.in_(["📅 План на неделю", "📅 Weekly Plan"]))
-async def menu_plan(message: types.Message, state: FSMContext):
+async def menu_plan(message: types.Message):
     from ai_trainer.bot.handlers.plan import cmd_plan
-    await cmd_plan(message, state)
+    await cmd_plan(message)
 
 @router.message(F.text.in_(["🧠 Задать вопрос ИИ", "🧠 Ask AI"]))
 async def menu_ask_ai(message: types.Message):
     await message.answer("Я слушаю! Задай любой вопрос о тренировках или питании.")
 
 @router.message(F.text.in_(["⚙️ Настройки", "⚙️ Settings"]))
-async def menu_settings(message: types.Message, state: FSMContext):
+async def menu_settings(message: types.Message):
     from ai_trainer.bot.handlers.settings import cmd_settings
-    await cmd_settings(message, state)
+    await cmd_settings(message)
 
 @router.message(Command("menu"))
 async def cmd_menu(message: types.Message):
