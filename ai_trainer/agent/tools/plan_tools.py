@@ -48,117 +48,119 @@ PERIODIZATION_CYCLE = [
 ]
 
 @tool
-async def generate_weekly_plan_tool(telegram_id: str) -> str:
+async def generate_weekly_plan_tool(telegram_id: str, split_type: str = "PPL") -> str:
     """
-    Generates a workout plan for the next week for the user.
-    Automatically determines the week type from the cycle (strength/hypertrophy/volume/deload).
+    Generates a highly detailed workout plan for the next week.
+    split_type can be 'Full Body', 'PPL' (Push/Pull/Legs), or 'Upper-Lower'.
+    Includes specific exercises, sets, reps, and target weights based on user PRs.
     """
     try:
-        logger.info(f"Generating plan for telegram_id: {telegram_id}")
+        logger.info(f"Generating detailed {split_type} plan for {telegram_id}")
         async with database.db_session() as db:
             user = await crud.get_user_by_telegram_id(db, str(telegram_id))
-            if not user:
-                logger.error(f"User with tid {telegram_id} not found during plan generation")
-                return "Error: User not found."
+            if not user: return "Error: User not found."
 
-            # Determine the next week number
+            # Update user preference if provided
+            if split_type:
+                user.preferred_split = split_type
+                await db.commit()
+
             result = await db.execute(
-                select(models.WeeklyPlan).filter(
-                    models.WeeklyPlan.user_id == user.id
-                ).order_by(models.WeeklyPlan.week_number.desc())
+                select(models.WeeklyPlan).filter(models.WeeklyPlan.user_id == user.id).order_by(models.WeeklyPlan.week_number.desc())
             )
             last_plan = result.scalars().first()
-            
             next_week_num = (last_plan.week_number + 1) if last_plan else 1
             week_info = PERIODIZATION_CYCLE[(next_week_num - 1) % 4]
             
-            # Get records to calculate weights
-            pr_result = await db.execute(
-                select(models.PersonalRecord).filter(models.PersonalRecord.user_id == user.id)
-            )
-            prs = pr_result.scalars().all()
-            pr_map = {pr.exercise.lower(): pr.one_rm_est for pr in prs}
+            pr_result = await db.execute(select(models.PersonalRecord).filter(models.PersonalRecord.user_id == user.id))
+            pr_map = {pr.exercise.lower(): pr.one_rm_est for pr in pr_result.scalars().all()}
             
-            # Basic plan structure
-            plan_data = {
-                "week_number": next_week_num,
-                "week_type": week_info["week_type"],
-                "week_name": week_info["name"],
-                "days": [
-                    {
-                        "day": "Monday",
-                        "type": "Push",
-                        "exercises": [
-                            {"name": "Bench Press", "sets": week_info["sets"], "reps": week_info["reps_range"]},
-                            {"name": "Overhead Press", "sets": week_info["sets"], "reps": week_info["reps_range"]}
-                        ]
-                    },
-                    {
-                        "day": "Wednesday",
-                        "type": "Pull",
-                        "exercises": [
-                            {"name": "Pull-ups", "sets": week_info["sets"], "reps": week_info["reps_range"]},
-                            {"name": "Bent-over Row", "sets": week_info["sets"], "reps": week_info["reps_range"]}
-                        ]
-                    },
-                    {
-                        "day": "Friday",
-                        "type": "Legs",
-                        "exercises": [
-                            {"name": "Squat", "sets": week_info["sets"], "reps": week_info["reps_range"]},
-                            {"name": "Deadlift", "sets": week_info["sets"], "reps": week_info["reps_range"]}
-                        ]
-                    }
+            days = []
+            if split_type.lower() == "full body":
+                days = [
+                    {"day": "Monday", "type": "Full Body A", "exercises": [
+                        {"name": "Squat", "sets": week_info["sets"], "reps": week_info["reps_range"]},
+                        {"name": "Bench Press", "sets": week_info["sets"], "reps": week_info["reps_range"]},
+                        {"name": "Pull-ups", "sets": 3, "reps": "Max"}
+                    ]},
+                    {"day": "Wednesday", "type": "Full Body B", "exercises": [
+                        {"name": "Deadlift", "sets": week_info["sets"], "reps": week_info["reps_range"]},
+                        {"name": "Overhead Press", "sets": week_info["sets"], "reps": week_info["reps_range"]},
+                        {"name": "Rows", "sets": week_info["sets"], "reps": week_info["reps_range"]}
+                    ]},
+                    {"day": "Friday", "type": "Full Body A", "exercises": [
+                        {"name": "Squat", "sets": week_info["sets"], "reps": week_info["reps_range"]},
+                        {"name": "Incline Press", "sets": week_info["sets"], "reps": week_info["reps_range"]},
+                        {"name": "Bicep Curls", "sets": 3, "reps": "12-15"}
+                    ]}
                 ]
-            }
-            
-            # Calculate target weights
-            for day in plan_data["days"]:
-                for ex in day["exercises"]:
-                    one_rm = pr_map.get(ex["name"].lower())
-                    if one_rm:
-                        target_weight = round((one_rm * week_info["intensity_val"]) / 2.5) * 2.5
-                        ex["target_weight"] = target_weight
-                    else:
-                        ex["target_weight"] = "To be determined"
+            else: # Default to PPL
+                days = [
+                    {"day": "Monday", "type": "Push", "exercises": [
+                        {"name": "Bench Press", "sets": week_info["sets"], "reps": week_info["reps_range"]},
+                        {"name": "Overhead Press", "sets": week_info["sets"], "reps": week_info["reps_range"]},
+                        {"name": "Triceps Extensions", "sets": 3, "reps": "12-15"}
+                    ]},
+                    {"day": "Wednesday", "type": "Pull", "exercises": [
+                        {"name": "Deadlift", "sets": week_info["sets"], "reps": week_info["reps_range"]},
+                        {"name": "Rows", "sets": week_info["sets"], "reps": week_info["reps_range"]},
+                        {"name": "Bicep Curls", "sets": 3, "reps": "12-15"}
+                    ]},
+                    {"day": "Friday", "type": "Legs", "exercises": [
+                        {"name": "Squat", "sets": week_info["sets"], "reps": week_info["reps_range"]},
+                        {"name": "Leg Press", "sets": week_info["sets"], "reps": week_info["reps_range"]},
+                        {"name": "Calf Raises", "sets": 4, "reps": "15-20"}
+                    ]}
+                ]
 
-            # Save the plan to the DB
+            for d in days:
+                for ex in d["exercises"]:
+                    one_rm = pr_map.get(ex["name"].lower())
+                    ex["target_weight"] = round((one_rm * week_info["intensity_val"]) / 2.5) * 2.5 if one_rm else "TBD"
+
+            plan_data = {"week_number": next_week_num, "week_type": week_info["week_type"], "week_name": week_info["name"], "days": days}
+            
             now = datetime.now(timezone.utc)
-            start_date = now + timedelta(days=(7 - now.weekday()))
-            
-            new_plan = models.WeeklyPlan(
-                user_id=user.id,
-                week_number=next_week_num,
-                week_type=week_info["week_type"],
-                start_date=start_date,
-                plan_data=plan_data,
-                is_active=1
-            )
+            new_plan = models.WeeklyPlan(user_id=user.id, week_number=next_week_num, week_type=week_info["week_type"], 
+                                         start_date=now + timedelta(days=(7-now.weekday())), plan_data=plan_data, is_active=1)
             db.add(new_plan)
-            await db.flush()
-            
-            # Deactivate old plans
-            await db.execute(
-                sa_update(models.WeeklyPlan).filter(
-                    models.WeeklyPlan.user_id == user.id, 
-                    models.WeeklyPlan.id != new_plan.id
-                ).values(is_active=0)
-            )
-            
+            await db.execute(sa_update(models.WeeklyPlan).filter(models.WeeklyPlan.user_id == user.id, models.WeeklyPlan.id != new_plan.id).values(is_active=0))
             await db.commit()
-            logger.success(f"Plan generated and saved for user {user.id}")
             
-            # Sync to Sheets
-            try:
-                await sheets.update_weekly_plan(plan_data)
-            except Exception as e:
-                logger.warning(f"Failed to sync plan to sheets: {e}")
+            # Sync and get detailed report
+            await sheets.update_weekly_plan(plan_data)
             
-            return f"✅ Plan generated for week #{next_week_num} ({week_info['name']})."
+            report = f"✅ Составлен детальный план '{split_type}' на неделю #{next_week_num} ({week_info['name']}).\n"
+            report += f"📊 Интенсивность: {week_info['intensity']}. Данные синхронизированы с Google Таблицей."
+            return report
             
     except Exception as e:
         logger.error(f"Error generating plan: {e}")
-        return f"❌ Error generating plan: {str(e)}"
+        return f"❌ Ошибка при создании плана: {str(e)}"
+
+@tool
+async def update_sheet_workout_report_tool(telegram_id: str, exercise_name: str, weight: float, reps: int) -> str:
+    """
+    Updates the Google Sheet directly with a specific exercise result performed by the user.
+    Use this when the user reports a finished exercise in chat.
+    """
+    try:
+        async with database.db_session() as db:
+            user = await crud.get_user_by_telegram_id(db, str(telegram_id))
+            if not user: return "Error: User not found."
+            
+            # 1. Update DB Personal Record if applicable
+            await crud.update_personal_record(db, user.id, exercise_name, weight, reps)
+            
+            # 2. Add to Google Sheets "Workout Results" tab
+            await sheets.log_workout(user.name, {
+                "workout_type": "Chat Update",
+                "exercises": [{"name": exercise_name, "sets": 1, "reps": [reps], "weight_kg": [weight]}]
+            })
+            
+            return f"✅ Записал в таблицу: {exercise_name} — {weight}кг на {reps} повт. Твой прогресс обновлен!"
+    except Exception as e:
+        return f"❌ Не удалось обновить таблицу: {e}"
 
 @tool
 async def get_current_plan_tool(telegram_id: str) -> str:

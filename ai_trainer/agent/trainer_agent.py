@@ -18,7 +18,7 @@ from ai_trainer.agent.memory.long_term import UserMemoryStore
 # Import tools
 from ai_trainer.agent.tools.nutrition_tools import calculate_macros_from_text, log_nutrition_tool
 from ai_trainer.agent.tools.workout_tools import log_workout_session_tool, get_workout_history_tool
-from ai_trainer.agent.tools.plan_tools import generate_weekly_plan_tool, get_current_plan_tool
+from ai_trainer.agent.tools.plan_tools import generate_weekly_plan_tool, get_current_plan_tool, update_sheet_workout_report_tool
 
 # Initialize knowledge base
 kb = FitnessKnowledgeBase()
@@ -30,7 +30,8 @@ tools = [
     log_workout_session_tool, 
     get_workout_history_tool,
     generate_weekly_plan_tool, 
-    get_current_plan_tool
+    get_current_plan_tool,
+    update_sheet_workout_report_tool
 ]
 
 class AgentState(TypedDict):
