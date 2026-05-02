@@ -185,39 +185,60 @@ async def process_weight(message: types.Message, state: FSMContext):
             error = "Please enter a number (e.g., 75 or 82.5)."
         await message.answer(error)
 
+from ai_trainer.agent.trainer_agent import build_trainer_graph
+from langchain_core.messages import HumanMessage
+
 @router.callback_query(RegistrationStates.waiting_for_goal, F.data.startswith("goal_"))
 async def process_goal_callback(callback: types.CallbackQuery, state: FSMContext):
     goal = callback.data.split("_")[1]
     
     data = await state.get_data()
     lang = data.get("language", "ru")
+    user_name = data.get("name", "User")
     data['goal'] = goal
     data['telegram_id'] = str(callback.from_user.id)
     
     try:
+        # 1. Создаем пользователя в БД
         async with database.db_session() as db:
             user = await crud.create_user(db, data)
         
-        # Initialize Google Sheets
+        # 2. Инициализируем Google Sheets
         sheets.setup_spreadsheet()
         
-        # Text for feedback
-        if lang == "ru":
-            goals_text = {"strength": "Сила", "hypertrophy": "Гипертрофия", "fat_loss": "Похудение"}
-            success_msg = f"Цель выбрана: {goals_text.get(goal)}\nОтлично! Профиль создан. Используй меню ниже для управления тренировками."
-        else:
-            goals_text = {"strength": "Strength", "hypertrophy": "Hypertrophy", "fat_loss": "Fat Loss"}
-            success_msg = f"Goal selected: {goals_text.get(goal)}\nGreat! Profile created. Use the menu below to manage your training."
-        
-        await callback.message.edit_text(success_msg)
-        await callback.message.answer("Меню активировано:", reply_markup=get_main_menu(lang))
-        await callback.answer()
-    except Exception as e:
-        logger.error(f"Error creating user: {e}")
-        error_msg = "Произошла ошибка при создании профиля."
+        # Информируем пользователя о начале генерации
+        generation_msg = "Приятно познакомиться, {}! Твой профиль создан. Сейчас я составлю для тебя персональный план тренировок на основе твоих данных..."
         if lang == "en":
-            error_msg = "An error occurred while creating your profile."
-        await callback.message.answer(error_msg)
+            generation_msg = "Nice to meet you, {}! Your profile is created. Now I'm generating a personalized training plan based on your metrics..."
+        
+        await callback.message.edit_text(generation_msg.format(user_name))
+
+        # 3. Генерируем план через AI Агента
+        agent = build_trainer_graph()
+        # Формируем запрос для агента
+        user_metrics = f"Возраст: {data['age']}, Рост: {data['height_cm']}см, Вес: {data['weight_kg']}кг, Цель: {goal}."
+        prompt = f"Привет! Я новый пользователь {user_name}. Мои данные: {user_metrics}. Составь мне, пожалуйста, вводный тренировочный план на неделю и сохрани его в базу данных."
+        if lang == "en":
+            prompt = f"Hi! I'm a new user {user_name}. My metrics: {user_metrics}. Goal: {goal}. Please generate an introductory weekly training plan for me and save it to the database."
+
+        # Запускаем агента
+        inputs = {"messages": [HumanMessage(content=prompt)], "user_id": data['telegram_id']}
+        await agent.ainvoke(inputs)
+
+        # 4. Финальное сообщение
+        success_msg = "Твой персональный план готов и добавлен в базу и Google Таблицу! Ты можешь посмотреть его, нажав кнопку '📅 План на неделю'."
+        if lang == "en":
+            success_msg = "Your personalized plan is ready and added to the database and Google Sheet! You can view it by clicking the '📅 Weekly Plan' button."
+        
+        await callback.message.answer(success_msg, reply_markup=get_main_menu(lang))
+        await callback.answer()
+        
+    except Exception as e:
+        logger.error(f"Error during onboarding: {e}")
+        error_msg = "Произошла ошибка при создании плана. Но профиль создан! Ты можешь попробовать сгенерировать план позже в меню."
+        if lang == "en":
+            error_msg = "An error occurred while creating the plan. But your profile is created! You can try generating a plan later from the menu."
+        await callback.message.answer(error_msg, reply_markup=get_main_menu(lang))
     finally:
         await state.clear()
 
