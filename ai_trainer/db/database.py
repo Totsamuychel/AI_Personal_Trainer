@@ -29,9 +29,17 @@ def get_engine():
 def get_sync_engine():
     global _sync_engine
     if _sync_engine is None:
-        if not SYNC_DATABASE_URL:
+        url = os.getenv("DATABASE_URL")
+        if not url:
             raise ValueError("DATABASE_URL environment variable is not set")
-        _sync_engine = create_engine(SYNC_DATABASE_URL, echo=False)
+        
+        # Convert async URL to sync if necessary
+        if url.startswith("sqlite+aiosqlite://"):
+            url = url.replace("sqlite+aiosqlite://", "sqlite://", 1)
+        elif url.startswith("postgresql+asyncpg://"):
+            url = url.replace("postgresql+asyncpg://", "postgresql://", 1)
+            
+        _sync_engine = create_engine(url, echo=False)
     return _sync_engine
 
 def get_session_factory():
