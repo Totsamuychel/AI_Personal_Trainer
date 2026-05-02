@@ -215,17 +215,12 @@ async def process_goal_callback(callback: types.CallbackQuery, state: FSMContext
         
         await callback.message.edit_text(generation_msg.format(user_name))
 
-        # 3. Генерируем план через AI Агента
-        agent = build_trainer_graph()
-        # Формируем запрос для агента
-        user_metrics = f"Возраст: {data['age']}, Рост: {data['height_cm']}см, Вес: {data['weight_kg']}кг, Цель: {goal}."
-        prompt = f"Привет! Я новый пользователь {user_name}. Мои данные: {user_metrics}. Составь мне, пожалуйста, вводный тренировочный план на неделю и сохрани его в базу данных."
-        if lang == "en":
-            prompt = f"Hi! I'm a new user {user_name}. My metrics: {user_metrics}. Goal: {goal}. Please generate an introductory weekly training plan for me and save it to the database."
-
-        # Запускаем агента
-        inputs = {"messages": [HumanMessage(content=prompt)], "user_id": data['telegram_id']}
-        await agent.ainvoke(inputs)
+        # 3. Генерируем план напрямую (надежнее для локальных моделей)
+        from ai_trainer.agent.tools.plan_tools import generate_weekly_plan_tool
+        
+        # Вызываем инструмент напрямую
+        plan_result = await generate_weekly_plan_tool.ainvoke({"telegram_id": data['telegram_id']})
+        logger.info(f"Initial plan generation result: {plan_result}")
 
         # 4. Финальное сообщение
         success_msg = "Твой персональный план готов и добавлен в базу и Google Таблицу! Ты можешь посмотреть его, нажав кнопку '📅 План на неделю'."

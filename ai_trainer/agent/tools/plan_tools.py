@@ -1,5 +1,5 @@
 from langchain.tools import tool
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from ai_trainer.db import crud, database, models
 from ai_trainer.sheets.client import SheetsClient
 from sqlalchemy import select, update as sa_update
@@ -54,9 +54,11 @@ async def generate_weekly_plan_tool(telegram_id: str) -> str:
     Automatically determines the week type from the cycle (strength/hypertrophy/volume/deload).
     """
     try:
+        logger.info(f"Generating plan for telegram_id: {telegram_id}")
         async with database.db_session() as db:
-            user = await crud.get_user_by_telegram_id(db, telegram_id)
+            user = await crud.get_user_by_telegram_id(db, str(telegram_id))
             if not user:
+                logger.error(f"User with tid {telegram_id} not found during plan generation")
                 return "Error: User not found."
 
             # Determine the next week number
@@ -121,11 +123,14 @@ async def generate_weekly_plan_tool(telegram_id: str) -> str:
                         ex["target_weight"] = "To be determined"
 
             # Save the plan to the DB
+            now = datetime.now(timezone.utc)
+            start_date = now + timedelta(days=(7 - now.weekday()))
+            
             new_plan = models.WeeklyPlan(
                 user_id=user.id,
                 week_number=next_week_num,
                 week_type=week_info["week_type"],
-                start_date=datetime.now() + timedelta(days=(7 - datetime.now().weekday())),
+                start_date=start_date,
                 plan_data=plan_data,
                 is_active=1
             )
@@ -140,8 +145,14 @@ async def generate_weekly_plan_tool(telegram_id: str) -> str:
                 ).values(is_active=0)
             )
             
+            await db.commit()
+            logger.success(f"Plan generated and saved for user {user.id}")
+            
             # Sync to Sheets
-            await sheets.update_weekly_plan(plan_data)
+            try:
+                await sheets.update_weekly_plan(plan_data)
+            except Exception as e:
+                logger.warning(f"Failed to sync plan to sheets: {e}")
             
             return f"✅ Plan generated for week #{next_week_num} ({week_info['name']})."
             

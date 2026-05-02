@@ -108,7 +108,7 @@ class SystemSettings(Base):
     id              = Column(Integer, primary_key=True)
     llm_provider    = Column(String, default="ollama")  # ollama / openai
     ollama_base_url = Column(String, default="http://localhost:11434")
-    ollama_model    = Column(String, default="gpt-oss:20b ")
+    ollama_model    = Column(String, default="gpt-oss20b")
     openai_api_key  = Column(String)
     openai_model    = Column(String, default="gpt-4o-mini")
     embedding_model = Column(String, default="nomic-embed-text")

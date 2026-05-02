@@ -45,7 +45,10 @@ def get_llm():
             else:
                 _llm = ChatOllama(
                     model=model,
-                    base_url=base_url
+                    base_url=base_url,
+                    num_ctx=4096,
+                    temperature=0.7,
+                    timeout=120 # Увеличиваем таймаут до 2 минут для 20b модели
                 )
     except Exception as e:
         # Fallback to basic env if DB fails

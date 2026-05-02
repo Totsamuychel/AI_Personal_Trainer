@@ -48,9 +48,14 @@ class AgentState(TypedDict):
 _trainer_graph = None
 
 def get_bound_llm():
-    """Retrieve the LLM bound with tools."""
+    """Retrieve the LLM bound with tools, with fallback for models that don't support it."""
     llm = get_llm()
-    return llm.bind_tools(tools)
+    try:
+        # Пытаемся привязать инструменты
+        return llm.bind_tools(tools)
+    except Exception as e:
+        logger.warning(f"Model does not support bind_tools: {e}. Falling back to standard LLM.")
+        return llm
 
 async def load_user_profile_node(state: AgentState):
     """Load user profile, personal records, and workout history from the database."""
@@ -179,50 +184,57 @@ def _detect_topic(query: str) -> str:
     return best_topic if scores[best_topic] > 0 else None  # None = без фильтра
 
 async def run_agent_node(state: AgentState):
-    """Construct system message with user profile and retrieved context, then invoke the LLM."""
-    llm = get_bound_llm()
-    
-    # Construct system message with user profile
-    profile = state.get('user_profile', {})
-    prs = state.get('personal_records', [])
-    history = state.get('recent_workouts', [])
-    context = state.get('retrieved_context', "")
-    memories = state.get('user_memories', [])
-    plan = state.get('current_plan', {})
-    
-    # Load system prompt from file
-    prompt_path = os.path.join(os.path.dirname(__file__), "prompts", "system_prompt.txt")
+    """Construct system message and invoke LLM with error handling."""
     try:
-        with open(prompt_path, "r", encoding="utf-8") as f:
-            system_prompt_template = f.read()
-    except Exception as e:
-        logger.error(f"Failed to load system prompt from {prompt_path}: {e}")
-        system_prompt_template = "You are a fitness assistant. Name: {name}, Goal: {goal}. Context: {retrieved_context}. Memories: {user_memories}"
-    
-    # Форматируем персональные факты
-    memories_text = "\n".join([f"- {m}" for m in memories]) if memories else "Нет сохраненных фактов."
+        logger.info(f"NODE: Running agent for user {state['user_id']}")
+        llm = get_bound_llm()
+        
+        # Construct system message with user profile
+        profile = state.get('user_profile', {})
+        prs = state.get('personal_records', [])
+        history = state.get('recent_workouts', [])
+        context = state.get('retrieved_context', "")
+        memories = state.get('user_memories', [])
+        plan = state.get('current_plan', {})
+        
+        # Load system prompt from file
+        prompt_path = os.path.join(os.path.dirname(__file__), "prompts", "system_prompt.txt")
+        try:
+            with open(prompt_path, "r", encoding="utf-8") as f:
+                system_prompt_template = f.read()
+        except Exception as e:
+            logger.error(f"Failed to load system prompt: {e}")
+            system_prompt_template = "You are a fitness assistant. Profile: {name}. Context: {retrieved_context}. Memories: {user_memories}"
+        
+        # Форматируем персональные факты
+        memories_text = "\n".join([f"- {m}" for m in memories]) if memories else "Нет сохраненных фактов."
 
-    system_prompt = system_prompt_template.format(
-        name=profile.get('name', 'N/A'),
-        age=profile.get('age', 'N/A'),
-        height=profile.get('height', 'N/A'),
-        weight=profile.get('weight', 'N/A'),
-        goal=profile.get('goal', 'N/A'),
-        level=profile.get('level', 'N/A'),
-        preferred_split=profile.get('preferred_split', 'N/A'),
-        week_type=plan.get('week_type', 'N/A'),
-        injuries=profile.get('injuries', 'None'),
-        telegram_id=state['user_id'],
-        personal_records=json.dumps(prs, ensure_ascii=False, indent=2),
-        recent_workouts=json.dumps(history, ensure_ascii=False, indent=2),
-        current_plan=json.dumps(plan, ensure_ascii=False, indent=2),
-        retrieved_context=context,
-        user_memories=memories_text
-    )
-    
-    messages = [SystemMessage(content=system_prompt)] + state['messages']
-    response = await llm.ainvoke(messages)
-    return {"messages": [response]}
+        system_prompt = system_prompt_template.format(
+            name=profile.get('name', 'N/A'),
+            age=profile.get('age', 'N/A'),
+            height=profile.get('height', 'N/A'),
+            weight=profile.get('weight', 'N/A'),
+            goal=profile.get('goal', 'N/A'),
+            level=profile.get('level', 'N/A'),
+            preferred_split=profile.get('preferred_split', 'N/A'),
+            week_type=plan.get('week_type', 'N/A'),
+            injuries=profile.get('injuries', 'None'),
+            telegram_id=state['user_id'],
+            personal_records=json.dumps(prs, ensure_ascii=False, indent=2),
+            recent_workouts=json.dumps(history, ensure_ascii=False, indent=2),
+            current_plan=json.dumps(plan, ensure_ascii=False, indent=2),
+            retrieved_context=context,
+            user_memories=memories_text
+        )
+        
+        messages = [SystemMessage(content=system_prompt)] + state['messages']
+        logger.info("Invoking LLM...")
+        response = await llm.ainvoke(messages)
+        logger.info("LLM response received")
+        return {"messages": [response]}
+    except Exception as e:
+        logger.error(f"Error in run_agent_node: {e}")
+        return {"messages": [AIMessage(content="Извини, у меня возникла ошибка при генерации ответа. Попробуй еще раз.")]}
 
 def should_continue(state: AgentState):
     """Determines whether the agent should continue to tools or end the conversation."""

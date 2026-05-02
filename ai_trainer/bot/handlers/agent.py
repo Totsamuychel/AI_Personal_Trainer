@@ -19,10 +19,12 @@ async def chat_with_agent(message: types.Message):
             "personal_records": [],
             "recent_workouts": [],
             "retrieved_context": "",
+            "user_memories": [], # Обязательное поле для AgentState
             "current_plan": {},
             "action_type": "analysis"
         }
         
+        logger.info(f"Sending message to AI agent from {message.from_user.id}")
         app = build_trainer_graph()
         result = await app.ainvoke(initial_state)
         
