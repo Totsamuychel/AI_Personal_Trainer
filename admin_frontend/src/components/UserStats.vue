@@ -30,7 +30,7 @@ const props = defineProps<{
   user: any
 }>()
 
-const emit = defineProps(['back'])
+const emit = defineEmits(['back'])
 
 const API_BASE = 'http://localhost:8000/admin'
 const stats = ref<any>(null)
