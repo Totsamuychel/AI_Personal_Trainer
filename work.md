@@ -66,7 +66,7 @@ from sqlalchemy import func  # уже импортировано вверху к
 from sqlalchemy import distinct  # аналогично
 Дублирование кода sync/async — вся нижняя половина файла дублирует верхнюю для sync-вариантов. Можно было бы использовать один набор helpers и адаптеры для sync/async.
 
-ai_trainer/db/models.py — 🟡 ДИЗАЙН БД
+[x] ai_trainer/db/models.py — 🟡 ДИЗАЙН БД
 Использование Integer вместо Boolean :
 
 python

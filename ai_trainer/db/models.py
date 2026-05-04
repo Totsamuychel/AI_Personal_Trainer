@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, JSON, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, Float, JSON, DateTime, ForeignKey, Enum, Boolean
 from sqlalchemy.orm import relationship, DeclarativeBase
 import enum
 from datetime import datetime, timezone
@@ -34,31 +34,32 @@ class User(Base):
     created_at      = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Scheduler settings
-    morning_tip_enabled = Column(Integer, default=1) # 1 - enabled, 0 - disabled
+    morning_tip_enabled = Column(Boolean, default=True) # True - enabled, False - disabled
     morning_tip_time    = Column(String, default="08:00") # Format: HH:MM
     
-    workouts        = relationship("WorkoutSession", back_populates="user")
-    plans           = relationship("WeeklyPlan", back_populates="user")
-    nutrition_logs  = relationship("NutritionLog", back_populates="user")
+    workouts        = relationship("WorkoutSession", back_populates="user", cascade="all, delete-orphan")
+    plans           = relationship("WeeklyPlan", back_populates="user", cascade="all, delete-orphan")
+    nutrition_logs  = relationship("NutritionLog", back_populates="user", cascade="all, delete-orphan")
+    personal_records = relationship("PersonalRecord", back_populates="user", cascade="all, delete-orphan")
 
 class WorkoutSession(Base):
     __tablename__ = "workout_sessions"
     id           = Column(Integer, primary_key=True)
-    user_id      = Column(Integer, ForeignKey("users.id"))
-    date         = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    user_id      = Column(Integer, ForeignKey("users.id"), index=True)
+    date         = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     workout_type = Column(String)              # Push / Pull / Legs / Full Body
     week_type    = Column(Enum(WeekType))
     duration_min = Column(Integer)
     notes        = Column(String)
     
     user         = relationship("User", back_populates="workouts")
-    exercises    = relationship("ExerciseLog", back_populates="session")
+    exercises    = relationship("ExerciseLog", back_populates="session", cascade="all, delete-orphan")
 
 class ExerciseLog(Base):
     __tablename__ = "exercise_logs"
     id         = Column(Integer, primary_key=True)
-    session_id = Column(Integer, ForeignKey("workout_sessions.id"))
-    name       = Column(String)
+    session_id = Column(Integer, ForeignKey("workout_sessions.id"), index=True)
+    name       = Column(String, index=True)
     sets       = Column(Integer)
     reps       = Column(JSON)   # [5, 5, 4] — reps in each set
     weight_kg  = Column(JSON)   # [80, 80, 77.5] — weight in each set
@@ -70,30 +71,32 @@ class ExerciseLog(Base):
 class PersonalRecord(Base):
     __tablename__ = "personal_records"
     id          = Column(Integer, primary_key=True)
-    user_id     = Column(Integer, ForeignKey("users.id"))
-    exercise    = Column(String)
+    user_id     = Column(Integer, ForeignKey("users.id"), index=True)
+    exercise    = Column(String, index=True)
     weight_kg   = Column(Float)
     reps        = Column(Integer)
     one_rm_est  = Column(Float)  # Estimated 1RM using Epley formula
-    date        = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    date        = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+    user        = relationship("User", back_populates="personal_records")
 
 class WeeklyPlan(Base):
     __tablename__ = "weekly_plans"
     id          = Column(Integer, primary_key=True)
-    user_id     = Column(Integer, ForeignKey("users.id"))
+    user_id     = Column(Integer, ForeignKey("users.id"), index=True)
     week_number = Column(Integer)
     week_type   = Column(Enum(WeekType))
     start_date  = Column(DateTime)
     plan_data   = Column(JSON)   # Full plan in JSON
-    is_active   = Column(Integer, default=1)
+    is_active   = Column(Boolean, default=True)
     
     user        = relationship("User", back_populates="plans")
 
 class NutritionLog(Base):
     __tablename__ = "nutrition_logs"
     id           = Column(Integer, primary_key=True)
-    user_id      = Column(Integer, ForeignKey("users.id"))
-    date         = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    user_id      = Column(Integer, ForeignKey("users.id"), index=True)
+    date         = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     meal_name    = Column(String)
     description  = Column(String)      # Original user text
     calories     = Column(Float)
@@ -113,4 +116,3 @@ class SystemSettings(Base):
     openai_model    = Column(String, default="gpt-4o-mini")
     embedding_model = Column(String, default="nomic-embed-text")
     updated_at      = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-
