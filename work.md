@@ -92,7 +92,7 @@ python
 workouts = relationship("WorkoutSession", back_populates="user", cascade="all, delete-orphan")
 PersonalRecord не имеет обратной связи с User — не критично, но неконсистентно с остальными моделями.
 
-ai_trainer/db/database.py — 🟡 КОНФИГУРАЦИЯ
+[x] ai_trainer/db/database.py — 🟡 КОНФИГУРАЦИЯ
 Движок PostgreSQL создаётся без пула соединений :
 
 python

@@ -23,7 +23,17 @@ def get_engine():
     if _engine is None:
         if not DATABASE_URL:
             raise ValueError("DATABASE_URL environment variable is not set")
-        _engine = create_async_engine(DATABASE_URL, echo=False)
+        
+        kwargs = {"echo": False}
+        if DATABASE_URL.startswith("postgresql"):
+            kwargs.update({
+                "pool_size": 5,
+                "max_overflow": 10,
+                "pool_timeout": 30,
+                "pool_recycle": 1800
+            })
+            
+        _engine = create_async_engine(DATABASE_URL, **kwargs)
     return _engine
 
 def get_sync_engine():
@@ -39,7 +49,16 @@ def get_sync_engine():
         elif url.startswith("postgresql+asyncpg://"):
             url = url.replace("postgresql+asyncpg://", "postgresql://", 1)
             
-        _sync_engine = create_engine(url, echo=False)
+        kwargs = {"echo": False}
+        if url.startswith("postgresql"):
+            kwargs.update({
+                "pool_size": 5,
+                "max_overflow": 10,
+                "pool_timeout": 30,
+                "pool_recycle": 1800
+            })
+            
+        _sync_engine = create_engine(url, **kwargs)
     return _sync_engine
 
 def get_session_factory():
@@ -57,7 +76,6 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
     async with async_session() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise
@@ -71,7 +89,6 @@ def sync_db_session() -> Generator[Session, None, None]:
     with session_factory() as session:
         try:
             yield session
-            session.commit()
         except Exception:
             session.rollback()
             raise
