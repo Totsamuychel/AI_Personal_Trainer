@@ -9,7 +9,7 @@ async def test_create_user(db_session):
         "age": 25,
         "goal": models.GoalType.strength
     }
-    user = await crud.create_user(db_session, user_data)
+    user = await crud.upsert_user(db_session, user_data)
     assert user.id is not None
     assert user.name == "Test User"
     
@@ -19,7 +19,7 @@ async def test_create_user(db_session):
 @pytest.mark.anyio
 async def test_create_workout(db_session):
     # Setup user
-    user = await crud.create_user(db_session, {"telegram_id": "67890", "name": "Athlete"})
+    user = await crud.upsert_user(db_session, {"telegram_id": "67890", "name": "Athlete"})
     
     workout_data = {
         "workout_type": "Push",

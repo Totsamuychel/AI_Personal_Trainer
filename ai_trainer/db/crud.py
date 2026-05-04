@@ -1,6 +1,7 @@
+import os
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session
-from sqlalchemy import select, update
+from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import select, update, func, distinct
 from . import models
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -187,6 +188,7 @@ async def get_volume_history(db: AsyncSession, user_id: int, limit: int = 30) ->
     logger.debug(f"Fetching volume history for user_id {user_id}")
     result = await db.execute(
         select(models.WorkoutSession)
+        .options(selectinload(models.WorkoutSession.exercises))
         .filter(models.WorkoutSession.user_id == user_id)
         .order_by(models.WorkoutSession.date.asc())
         .limit(limit)
@@ -195,12 +197,7 @@ async def get_volume_history(db: AsyncSession, user_id: int, limit: int = 30) ->
     
     volume_data = []
     for session in sessions:
-        # Eagerly load exercises
-        ex_result = await db.execute(
-            select(models.ExerciseLog)
-            .filter(models.ExerciseLog.session_id == session.id)
-        )
-        exercises = ex_result.scalars().all()
+        exercises = session.exercises
         
         total_volume = 0
         for ex in exercises:
