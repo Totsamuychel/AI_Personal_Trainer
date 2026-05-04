@@ -48,9 +48,9 @@ class AgentState(TypedDict):
 # Singletons
 _trainer_graph = None
 
-def get_bound_llm():
+async def get_bound_llm():
     """Retrieve the LLM bound with tools, with fallback for models that don't support it."""
-    llm = get_llm()
+    llm = await get_llm()
     try:
         # Пытаемся привязать инструменты
         return llm.bind_tools(tools)
@@ -188,7 +188,7 @@ async def run_agent_node(state: AgentState):
     """Construct system message and invoke LLM with robust error handling."""
     try:
         logger.info(f"NODE: Running agent for user {state['user_id']}")
-        llm = get_bound_llm()
+        llm = await get_bound_llm()
         
         # Construct system message with user profile
         profile = state.get('user_profile', {})
@@ -262,8 +262,11 @@ async def store_memory_node(state: AgentState):
     memory_store = UserMemoryStore(state['user_id'])
     
     # Используем get_llm() напрямую для анализа (без инструментов)
-    llm = get_llm()
-    memory_store.extract_and_save_facts(conv_history, llm)
+    llm = await get_llm()
+    # Вызываем extract_and_save_facts в отдельном потоке, так как внутри он использует синхронные методы
+    import asyncio
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, memory_store.extract_and_save_facts, conv_history, llm)
     
     return state
 

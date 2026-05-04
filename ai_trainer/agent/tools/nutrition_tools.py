@@ -16,7 +16,7 @@ async def calculate_macros_from_text(description: str) -> str:
     Calculates macronutrients based on a textual description of food.
     Returns a JSON string with keys: calories, protein, carbs, fat, meal_name.
     """
-    llm = get_llm()
+    llm = await get_llm()
     prompt = PromptTemplate.from_template(
         "Ты профессиональный диетолог. Посчитай КБЖУ для следующего приема пищи: {description}.\n"
         "Обязательно верни ответ ТОЛЬКО в формате валидного JSON без лишнего текста.\n"
