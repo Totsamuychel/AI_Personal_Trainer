@@ -107,7 +107,7 @@ _engine = create_async_engine(
 )
 В db_session есть избыточный await session.commit() в блоке try — при исключении коммит не выполнится, но наличие его здесь создаёт ложное ощущение двойного коммита.
 
-ai_trainer/agent/trainer_agent.py — 🟡 АРХИТЕКТУРА
+[x] ai_trainer/agent/trainer_agent.py — 🟡 АРХИТЕКТУРА
 Прямые SQL-запросы в load_user_profile_node нарушают абстракцию CRUD-слоя :
 
 python
@@ -129,7 +129,7 @@ memory_store.extract_and_save_facts(conv_history, llm)  # sync call → блок
 
 Небезопасное форматирование промпта — ручная замена {} через .replace() работает, но не защищена от коллизий (если в тексте промпта встречается паттерн вида {some_key}, он будет заменён на N/A). Лучше использовать string.Template с $-синтаксисом.
 
-ai_trainer/bot/handlers/start.py — 🟡 СТРУКТУРА
+[x] ai_trainer/bot/handlers/start.py — 🟡 СТРУКТУРА
 Импорты внутри функций — серьёзный антипаттерн :
 
 python

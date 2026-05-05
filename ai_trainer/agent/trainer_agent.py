@@ -2,6 +2,7 @@ from typing import TypedDict, Annotated, List, Union, Optional
 import operator
 import json
 import os
+import string
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 from langchain_openai import ChatOpenAI
@@ -85,26 +86,22 @@ async def load_user_profile_node(state: AgentState):
             "injuries": user.injuries
         }
         
-        # Load PRs
-        pr_result = await db.execute(select(models.PersonalRecord).filter(models.PersonalRecord.user_id == user.id))
-        prs = pr_result.scalars().all()
+        # Load PRs using CRUD
+        prs = await crud.get_all_personal_records(db, user.id)
         pr_list = [
             {"exercise": pr.exercise, "weight": pr.weight_kg, "reps": pr.reps, "1rm": pr.one_rm_est}
             for pr in prs
         ]
         
-        # Load recent workouts
+        # Load recent workouts using CRUD
         history = await crud.get_workout_history(db, user.id, limit=5)
         workout_list = [
             {"date": w.date.isoformat(), "type": w.workout_type, "notes": w.notes}
             for w in history
         ]
         
-        # Load current plan
-        plan_result = await db.execute(
-            select(models.WeeklyPlan).filter(models.WeeklyPlan.user_id == user.id, models.WeeklyPlan.is_active == 1)
-        )
-        plan = plan_result.scalars().first()
+        # Load current plan using CRUD
+        plan = await crud.get_active_weekly_plan(db, user.id)
         plan_dict = plan.plan_data if plan else {}
         
         return {
@@ -202,12 +199,12 @@ async def run_agent_node(state: AgentState):
         prompt_path = os.path.join(os.path.dirname(__file__), "prompts", "system_prompt.txt")
         try:
             with open(prompt_path, "r", encoding="utf-8") as f:
-                template = f.read()
+                template_str = f.read()
         except Exception as e:
             logger.error(f"Failed to load system prompt: {e}")
-            template = "You are a fitness assistant. Profile: {name}. Context: {retrieved_context}. Memories: {user_memories}"
+            template_str = "You are a fitness assistant. Profile: $name. Context: $retrieved_context. Memories: $user_memories"
         
-        # Безопасное форматирование промпта (защита от KeyError из-за лишних скобок в тексте)
+        # Безопасное форматирование промпта через string.Template
         variables = {
             "name": profile.get('name', 'N/A'),
             "age": profile.get('age', 'N/A'),
@@ -226,10 +223,8 @@ async def run_agent_node(state: AgentState):
             "user_memories": "\n".join([f"- {m}" for m in memories]) if memories else "Нет сохраненных фактов."
         }
         
-        # Используем ручную замену для предотвращения KeyError при наличии лишних {} в шаблоне
-        system_prompt = template
-        for key, value in variables.items():
-            system_prompt = system_prompt.replace("{" + key + "}", str(value))
+        template = string.Template(template_str)
+        system_prompt = template.safe_substitute(variables)
 
         messages = [SystemMessage(content=system_prompt)] + state['messages']
         logger.info("Invoking LLM...")

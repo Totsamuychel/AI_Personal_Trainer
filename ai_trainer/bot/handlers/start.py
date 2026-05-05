@@ -3,9 +3,14 @@ from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from langchain_core.messages import HumanMessage
+from loguru import logger
+
 from ai_trainer.db import crud, database
 from ai_trainer.sheets.client import SheetsClient
-from loguru import logger
+from ai_trainer.bot.keyboards.main_menu import get_main_menu
+from ai_trainer.agent.trainer_agent import build_trainer_graph
+from ai_trainer.agent.tools.plan_tools import generate_weekly_plan_tool
 
 router = Router()
 sheets = SheetsClient()
@@ -22,8 +27,6 @@ class RegistrationStates(StatesGroup):
 MIN_AGE, MAX_AGE = 12, 100
 MIN_HEIGHT, MAX_HEIGHT = 100, 250
 MIN_WEIGHT, MAX_WEIGHT = 30, 250
-
-from ai_trainer.bot.keyboards.main_menu import get_main_menu
 
 @router.message(CommandStart())
 async def cmd_start(message: types.Message, state: FSMContext):
@@ -187,9 +190,6 @@ async def process_weight(message: types.Message, state: FSMContext):
             error = "Please enter a number (e.g., 75 or 82.5)."
         await message.answer(error)
 
-from ai_trainer.agent.trainer_agent import build_trainer_graph
-from langchain_core.messages import HumanMessage
-
 @router.callback_query(RegistrationStates.waiting_for_goal, F.data.startswith("goal_"))
 async def process_goal_callback(callback: types.CallbackQuery, state: FSMContext):
     goal = callback.data.split("_")[1]
@@ -216,8 +216,6 @@ async def process_goal_callback(callback: types.CallbackQuery, state: FSMContext
         await callback.message.edit_text(generation_msg.format(user_name))
 
         # 3. Генерируем план напрямую (надежнее для локальных моделей)
-        from ai_trainer.agent.tools.plan_tools import generate_weekly_plan_tool
-        
         # Вызываем инструмент напрямую
         plan_result = await generate_weekly_plan_tool.ainvoke({"telegram_id": data['telegram_id']})
         logger.info(f"Initial plan generation result: {plan_result}")
