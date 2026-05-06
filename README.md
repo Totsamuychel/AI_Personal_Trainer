@@ -1,4 +1,4 @@
-# 🏋️ AI Personal Trainer
+# 🏗️ AI Personal Trainer
 
 An intelligent, AI-powered personal training assistant that helps users track workouts, analyze progress, manage nutrition, and generate personalized training plans with automated periodization.
 
@@ -7,6 +7,57 @@ An intelligent, AI-powered personal training assistant that helps users track wo
 ## 🚀 Overview
 
 The **AI Personal Trainer** is more than just a logging app. It's a sophisticated AI agent built on **LangGraph** and **LangChain** that acts as a real-life coach. It remembers your injuries, calculates your 1RM (One Rep Max) trends, adapts your training volume based on fatigue, and provides technical tips using a **RAG (Retrieval-Augmented Generation)** knowledge base.
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+graph TD
+    A["📱 Telegram Bot\n(aiogram 3.x)"] --> B["📨 Message Handler\nFSM · Commands · Callbacks"]
+    B --> C["⚡ FastAPI Backend"]
+
+    C --> D["🤖 LangGraph Agent\n(Stateful AI Loop)"]
+
+    D --> E{"Intent Detection"}
+
+    E -- "Log Workout" --> F["💪 Workout Tool\nEpley 1RM · PR update"]
+    E -- "Nutrition" --> G["🥗 Nutrition Tool\nMacro calc · Calorie count"]
+    E -- "Training Plan" --> H["📅 Periodization Tool\nStrength → Hypertrophy → Volume → Deload"]
+    E -- "Technique Tip" --> I["📚 RAG Tool\nVector search"]
+
+    subgraph Memory["🧠 Memory System"]
+        J["🗄️ PostgreSQL\nProfiles · Workouts · Nutrition"]
+        K["🕷️ ChromaDB\nSemantic Memory · RAG KB"]
+    end
+
+    D --> J
+    D --> K
+    I --> K
+
+    subgraph LLM["💬 LLM Layer"]
+        L["GPT-4o\n(OpenAI API)"]
+        M["Llama 3.1:8b\n(Ollama · Local)"]
+        N["nomic-embed-text\n(Embeddings)"]
+    end
+
+    D --> L
+    D --> M
+    K --> N
+
+    F --> O["📊 Google Sheets\n(gspread API)"]
+    G --> O
+    H --> O
+
+    subgraph Infra["🐳 Infrastructure"]
+        P["Docker Compose"]
+        Q["⏰ Scheduler\nWeekly plan generation"]
+    end
+
+    C --> Q
+```
+
+---
 
 ## ✨ Key Features
 
