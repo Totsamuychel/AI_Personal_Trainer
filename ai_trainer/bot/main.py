@@ -6,6 +6,12 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from loguru import logger
 from dotenv import load_dotenv
 
+try:
+    from aiogram.fsm.storage.redis import RedisStorage
+    _redis_available = True
+except ImportError:
+    _redis_available = False
+
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
@@ -26,7 +32,16 @@ async def main():
         return
 
     bot = Bot(token=token)
-    dp = Dispatcher(storage=MemoryStorage())
+
+    redis_url = os.getenv("REDIS_URL")
+    if _redis_available and redis_url:
+        storage = RedisStorage.from_url(redis_url)
+        logger.info(f"Using RedisStorage: {redis_url}")
+    else:
+        storage = MemoryStorage()
+        logger.warning("Redis unavailable — using MemoryStorage (FSM state lost on restart)")
+
+    dp = Dispatcher(storage=storage)
 
     # Register routers
     dp.include_router(start.router)

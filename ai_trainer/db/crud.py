@@ -164,7 +164,6 @@ async def get_exercise_progress_with_dates(db: AsyncSession, user_id: int, exerc
 async def get_user_exercises(db: AsyncSession, user_id: int) -> List[str]:
     """Returns a list of unique exercise names for a user."""
     logger.debug(f"Fetching exercise list for user_id {user_id}")
-    from sqlalchemy import distinct
     result = await db.execute(
         select(distinct(models.ExerciseLog.name))
         .join(models.WorkoutSession)

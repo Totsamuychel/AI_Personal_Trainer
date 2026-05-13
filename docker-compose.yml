@@ -19,30 +19,44 @@ services:
 
   api:
     build: .
-    command: uvicorn api.app:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn ai_trainer.api.app:app --host 0.0.0.0 --port 8000 --reload
     environment:
       - DATABASE_URL=postgresql://trainer_user:${POSTGRES_PASSWORD}@postgres:5432/ai_trainer
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     volumes:
       - .:/app
-      - ./chroma_fitness_db:/app/chroma_fitness_db
-      - ./memory_db:/app/memory_db
     ports:
       - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   bot:
     build: .
-    command: python bot/main.py
     environment:
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - DATABASE_URL=postgresql://trainer_user:${POSTGRES_PASSWORD}@postgres:5432/ai_trainer
       - API_URL=http://api:8000
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - .:/app
     depends_on:
-      - api
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
 
   ollama:
     image: ollama/ollama
@@ -50,6 +64,15 @@ services:
       - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
 volumes:
   postgres_data:
