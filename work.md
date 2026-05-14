@@ -1,5 +1,5 @@
 # AI Personal Trainer — Статус проекта
-_Обновлено: 2026-05-13_
+_Обновлено: 2026-05-14_
 
 ---
 
@@ -113,21 +113,17 @@ _Нет открытых средних багов._
 
 ---
 
-## Что не реализовано
+### Тесты
+- [x] `test_crud.py` — 17 тестов: 1RM формула (3), User CRUD (4), Workout (4), Personal Records (2), Nutrition (1), SystemSettings (2), Volume history (1)
+- [x] `test_api.py` — 10 тестов: root, публичные user-эндпоинты (4), admin-эндпоинты (4), проверка auth (1)
+- [x] Все 27 тестов проходят на SQLite in-memory без PostgreSQL
 
-### ❌ Отсутствует полностью
+### Seed-данные
+- [x] `scripts/seed_test_db.py` — реалистичный тестовый пользователь: 10 тренировок за 28 дней, 10 записей питания, личные рекорды, план на неделю
 
-- **Admin frontend** — ✅ реализован (Vue 3 + Vite + Tailwind, собирается).
-- **Тесты** — покрытие минимальное: 3 теста (`test_create_user`, `test_create_workout`, `test_1rm_calculation`). Нет тестов для handlers, agent, RAG, sheets, scheduler.
-- **API аутентификация** — FastAPI endpoints открыты без JWT/API key.
-- **QLoRA fine-tuning** — упомянут в документации, pipeline не создан.
-- **Компьютерное зрение** — MediaPipe для анализа техники (в roadmap v1.1, не начат).
+---
 
-### Приоритетный список задач
+## Что не реализовано (out of scope / roadmap)
 
-1. **Исправить баг `plt.Rectangle`** в `progress.py:236` (ломает volume chart)
-2. **Убрать синхронный вызов** в `store_memory_node` (блокировка event loop)
-3. **Защитить `SheetsClient()` от краша при старте** (graceful init)
-4. **Написать тесты** — минимум для handlers и agent (20+ тестов)
-5. **Добавить JWT** к FastAPI admin endpoints
-6. **Реализовать admin frontend** (или убрать пустую папку)
+- **QLoRA fine-tuning** — ML pipeline, roadmap v2
+- **Компьютерное зрение** — MediaPipe для анализа техники, roadmap v1.1
