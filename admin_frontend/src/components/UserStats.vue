@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import axios from 'axios'
+import { adminHttp } from '../api/adminHttp'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -33,10 +33,10 @@ const fetchData = async () => {
   loading.value = true
   try {
     const [statsRes, nutritionRes, recordsRes, workoutsRes] = await Promise.all([
-      axios.get(`${API_BASE}/users/${props.user.id}/stats`),
-      axios.get(`${API_BASE}/users/${props.user.id}/nutrition`),
-      axios.get(`${API_BASE}/users/${props.user.id}/records`),
-      axios.get(`${API_BASE}/users/${props.user.id}/workouts`),
+      adminHttp.get(`${API_BASE}/users/${props.user.id}/stats`),
+      adminHttp.get(`${API_BASE}/users/${props.user.id}/nutrition`),
+      adminHttp.get(`${API_BASE}/users/${props.user.id}/records`),
+      adminHttp.get(`${API_BASE}/users/${props.user.id}/workouts`),
     ])
     stats.value = statsRes.data
     nutrition.value = nutritionRes.data

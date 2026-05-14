@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from typing import List, Optional
+from typing import Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -8,7 +8,14 @@ from pydantic import BaseModel
 from aiogram import Bot
 import os
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+from ai_trainer.api.deps import verify_admin_api_key
+
+router = APIRouter(
+    prefix="/admin",
+    tags=["admin"],
+    dependencies=[Depends(verify_admin_api_key)],
+)
+
 
 async def get_db():
     async with database.db_session() as session:
@@ -43,17 +50,29 @@ def _serialize_user(u: models.User) -> dict:
         "created_at": u.created_at.isoformat() if u.created_at else None,
     }
 
-def _serialize_settings(s: models.SystemSettings) -> dict:
+
+def _openai_key_mask(raw: Optional[str]) -> Tuple[Optional[str], bool]:
+    if not raw or not str(raw).strip():
+        return None, False
+    k = str(raw).strip()
+    tail = k[-4:] if len(k) > 4 else ""
+    masked = ("•" * 8 + tail) if tail else "••••"
+    return masked, True
+
+
+def _serialize_settings(s: Optional[models.SystemSettings]) -> dict:
     if not s:
         return {}
+    masked, configured = _openai_key_mask(s.openai_api_key)
     return {
         "id": s.id,
         "llm_provider": s.llm_provider,
         "ollama_base_url": s.ollama_base_url,
         "ollama_model": s.ollama_model,
-        "openai_api_key": s.openai_api_key,
         "openai_model": s.openai_model,
         "embedding_model": s.embedding_model,
+        "openai_api_key_masked": masked,
+        "openai_api_key_configured": configured,
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,
     }
 
@@ -103,6 +122,8 @@ async def get_admin_settings(db: AsyncSession = Depends(get_db)):
 @router.put("/settings")
 async def update_admin_settings(update_data: SettingsUpdate, db: AsyncSession = Depends(get_db)):
     data = {k: v for k, v in update_data.model_dump().items() if v is not None}
+    if "openai_api_key" in data and not str(data["openai_api_key"]).strip():
+        del data["openai_api_key"]
     settings = await crud.update_system_settings(db, data)
     return _serialize_settings(settings)
 

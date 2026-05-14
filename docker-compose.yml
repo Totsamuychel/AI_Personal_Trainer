@@ -20,9 +20,12 @@ services:
   api:
     build: .
     command: uvicorn ai_trainer.api.app:app --host 0.0.0.0 --port 8000 --reload
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=postgresql://trainer_user:${POSTGRES_PASSWORD}@postgres:5432/ai_trainer
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
     volumes:
       - .:/app
     ports:
@@ -43,11 +46,15 @@ services:
 
   bot:
     build: .
+    env_file:
+      - .env
     environment:
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - DATABASE_URL=postgresql://trainer_user:${POSTGRES_PASSWORD}@postgres:5432/ai_trainer
       - API_URL=http://api:8000
       - REDIS_URL=redis://redis:6379/0
+      # Внутри Docker-сети Ollama доступен по имени сервиса (перекрывает localhost из .env)
+      - OLLAMA_BASE_URL=http://ollama:11434
     volumes:
       - .:/app
     depends_on:
@@ -78,6 +85,8 @@ services:
     build:
       context: ./admin_frontend
       dockerfile: Dockerfile
+    environment:
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
     ports:
       - "3000:80"
     depends_on:

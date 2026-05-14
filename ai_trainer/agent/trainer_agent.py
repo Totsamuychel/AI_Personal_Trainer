@@ -1,4 +1,5 @@
 from typing import TypedDict, Annotated, List, Union, Optional
+import asyncio
 import operator
 import json
 import os
@@ -111,6 +112,33 @@ async def load_user_profile_node(state: AgentState):
             "current_plan": plan_dict
         }
 
+
+def _sync_retrieve_context(user_id: str, last_message: str) -> dict:
+    """Sync RAG + Chroma user memory (runs in thread pool; blocks executor only)."""
+    topic = _detect_topic(last_message)
+    docs = kb.search(last_message, k=2, topic=topic)
+
+    context_parts = []
+    for doc in docs:
+        source = doc.metadata.get("book_title", doc.metadata.get("source", "База знаний"))
+        page_num = doc.metadata.get("page_number", "")
+        author = doc.metadata.get("author", "")
+
+        source_label = f"{source} ({author})" if author else source
+        if page_num:
+            source_label += f" [стр. {page_num}]"
+
+        context_parts.append(f"[Источник: {source_label}]\n{doc.page_content}")
+
+    memory_store = UserMemoryStore(user_id)
+    memories = memory_store.recall(last_message, k=3)
+
+    return {
+        "retrieved_context": "\n\n---\n\n".join(context_parts),
+        "user_memories": memories,
+    }
+
+
 async def retrieve_context_node(state: AgentState):
     """Retrieves context from RAG (books) and User Memory (personal facts)."""
     last_message = ""
@@ -118,38 +146,21 @@ async def retrieve_context_node(state: AgentState):
         if isinstance(msg, HumanMessage):
             last_message = msg.content
             break
-    
+
     if not last_message:
         return {"retrieved_context": "", "user_memories": []}
 
     logger.info(f"Retrieving context and memory for user {state['user_id']}")
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None,
+        _sync_retrieve_context,
+        state["user_id"],
+        last_message,
+    )
 
-    # 1. Поиск по общей базе знаний (RAG)
-    topic = _detect_topic(last_message)
-    docs = kb.search(last_message, k=2, topic=topic)
 
-    context_parts = []
-    for doc in docs:
-        source    = doc.metadata.get("book_title", doc.metadata.get("source", "База знаний"))
-        page_num  = doc.metadata.get("page_number", "")
-        author    = doc.metadata.get("author", "")
-        
-        source_label = f"{source} ({author})" if author else source
-        if page_num:
-            source_label += f" [стр. {page_num}]"
-            
-        context_parts.append(f"[Источник: {source_label}]\n{doc.page_content}")
-
-    # 2. Поиск по памяти пользователя
-    memory_store = UserMemoryStore(state['user_id'])
-    memories = memory_store.recall(last_message, k=3)
-
-    return {
-        "retrieved_context": "\n\n---\n\n".join(context_parts),
-        "user_memories": memories
-    }
-
-def _detect_topic(query: str) -> str:
+def _detect_topic(query: str) -> Optional[str]:
     """Определяет тему запроса по ключевым словам."""
     query_lower = query.lower()
 

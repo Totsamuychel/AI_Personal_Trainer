@@ -271,9 +271,13 @@ ai_trainer/
 │   └── test_bot.py
 │
 ├── 📁 scripts/                      # Утилиты
-│   ├── init_knowledge_base.py       # Первичная загрузка RAG
-│   ├── seed_exercises.py            # Заполнение БД упражнениями
-│   └── backup_db.py                 # Бэкап базы данных
+│   ├── add_user.py
+│   ├── seed_settings.py
+│   ├── seed_test_db.py
+│   └── fix_model.py / fix_model_name.py
+│
+├── 📁 ai_trainer/rag/
+│   └── build_index.py               # CLI: первичная индексация RAG (--exercises, --all, …)
 │
 ├── docker-compose.yml
 ├── Dockerfile
@@ -1140,9 +1144,9 @@ docker-compose exec ollama ollama pull nomic-embed-text
 # 5. Применяем миграции БД
 docker-compose run --rm api alembic upgrade head
 
-# 6. Инициализируем RAG базу знаний
-docker-compose run --rm api python scripts/init_knowledge_base.py
-docker-compose run --rm api python scripts/seed_exercises.py
+# 6. Инициализируем RAG (упражнения из JSON; опционально — PDF из data/books)
+docker-compose run --rm api python ai_trainer/rag/build_index.py --exercises
+# docker-compose run --rm api python ai_trainer/rag/build_index.py --all
 
 # 7. Запускаем всё
 docker-compose up -d
@@ -1180,6 +1184,9 @@ GOOGLE_SHEET_TEMPLATE_ID=your_template_spreadsheet_id
 APP_ENV=development             # development / production
 LOG_LEVEL=INFO
 SECRET_KEY=your_secret_key_here
+
+# Админка FastAPI (/admin/*): если задан — требуется заголовок X-Admin-API-Key или Authorization: Bearer …
+ADMIN_API_KEY=generate_a_long_random_string
 ```
 
 ---
@@ -1207,7 +1214,7 @@ SECRET_KEY=your_secret_key_here
 - [ ] Собрать/спарсить данные по упражнениям (JSON формат)
 - [ ] Написать `knowledge_base.py` с загрузкой и индексацией
 - [ ] Написать `retriever.py` с семантическим поиском
-- [ ] Запустить `init_knowledge_base.py`, проверить поиск
+- [ ] Запустить `python ai_trainer/rag/build_index.py --exercises`, проверить поиск
 - [ ] Тест: задать вопрос → получить релевантный ответ из RAG
 
 ### Phase 3 — AI Agent Core (День 9-14)

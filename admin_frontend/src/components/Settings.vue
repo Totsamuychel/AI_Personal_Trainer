@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import { adminHttp } from '../api/adminHttp'
 import { Save, Server, Key, Cpu } from 'lucide-vue-next'
 
 const API_BASE = '/admin'
-const settings = ref<any>({})
+const settings = ref<Record<string, unknown>>({})
+const openaiNewKey = ref('')
 const loading = ref(true)
 const saving = ref(false)
 
 const fetchSettings = async () => {
   loading.value = true
   try {
-    const res = await axios.get(`${API_BASE}/settings`)
+    const res = await adminHttp.get(`${API_BASE}/settings`)
     settings.value = res.data
+    openaiNewKey.value = ''
   } catch (err) {
     console.error('Failed to fetch settings', err)
   } finally {
@@ -23,7 +25,20 @@ const fetchSettings = async () => {
 const saveSettings = async () => {
   saving.value = true
   try {
-    await axios.put(`${API_BASE}/settings`, settings.value)
+    const payload: Record<string, unknown> = {
+      llm_provider: settings.value.llm_provider,
+      ollama_base_url: settings.value.ollama_base_url,
+      ollama_model: settings.value.ollama_model,
+      openai_model: settings.value.openai_model,
+      embedding_model: settings.value.embedding_model,
+    }
+    const nk = openaiNewKey.value.trim()
+    if (nk) {
+      payload.openai_api_key = nk
+    }
+    await adminHttp.put(`${API_BASE}/settings`, payload)
+    openaiNewKey.value = ''
+    await fetchSettings()
     alert('Настройки сохранены!')
   } catch (err) {
     console.error('Failed to save settings', err)
@@ -52,7 +67,7 @@ onMounted(fetchSettings)
         <label class="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
           <Cpu :size="16" /> Провайдер LLM
         </label>
-        <select 
+        <select
           v-model="settings.llm_provider"
           class="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none"
         >
@@ -68,7 +83,7 @@ onMounted(fetchSettings)
         </h3>
         <div>
           <label class="block text-xs font-medium text-blue-700 uppercase">Base URL</label>
-          <input 
+          <input
             v-model="settings.ollama_base_url"
             type="text"
             class="w-full border rounded p-2 mt-1"
@@ -77,7 +92,7 @@ onMounted(fetchSettings)
         </div>
         <div>
           <label class="block text-xs font-medium text-blue-700 uppercase">Модель</label>
-          <input 
+          <input
             v-model="settings.ollama_model"
             type="text"
             class="w-full border rounded p-2 mt-1"
@@ -91,10 +106,16 @@ onMounted(fetchSettings)
         <h3 class="font-bold text-green-800 flex items-center gap-2">
           <Key :size="16" /> Настройки OpenAI
         </h3>
+        <p v-if="settings.openai_api_key_configured" class="text-sm text-green-700">
+          Текущий ключ: <span class="font-mono">{{ settings.openai_api_key_masked }}</span>
+        </p>
+        <p v-else class="text-sm text-amber-700">Ключ OpenAI ещё не задан.</p>
         <div>
-          <label class="block text-xs font-medium text-green-700 uppercase">API Key</label>
-          <input 
-            v-model="settings.openai_api_key"
+          <label class="block text-xs font-medium text-green-700 uppercase">
+            Новый API Key (оставьте пустым, чтобы не менять)
+          </label>
+          <input
+            v-model="openaiNewKey"
             type="password"
             class="w-full border rounded p-2 mt-1"
             placeholder="sk-..."
@@ -102,7 +123,7 @@ onMounted(fetchSettings)
         </div>
         <div>
           <label class="block text-xs font-medium text-green-700 uppercase">Модель</label>
-          <input 
+          <input
             v-model="settings.openai_model"
             type="text"
             class="w-full border rounded p-2 mt-1"
@@ -114,7 +135,7 @@ onMounted(fetchSettings)
       <!-- Embeddings -->
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-2">Модель Embeddings</label>
-        <input 
+        <input
           v-model="settings.embedding_model"
           type="text"
           class="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -123,12 +144,12 @@ onMounted(fetchSettings)
       </div>
 
       <div class="pt-4 border-t">
-        <button 
+        <button
           @click="saveSettings"
           :disabled="saving"
           class="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2"
         >
-          <Save :size="20" /> 
+          <Save :size="20" />
           {{ saving ? 'Сохранение...' : 'Сохранить настройки' }}
         </button>
       </div>

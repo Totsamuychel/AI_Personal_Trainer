@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import { adminHttp } from '../api/adminHttp'
 import { MessageSquare, Send, BarChart2, RefreshCw, Radio } from 'lucide-vue-next'
 import UserStats from './UserStats.vue'
 
@@ -16,7 +16,7 @@ const broadcastMode = ref(false)
 const fetchUsers = async () => {
   loading.value = true
   try {
-    const res = await axios.get(`${API_BASE}/users`)
+    const res = await adminHttp.get(`${API_BASE}/users`)
     users.value = res.data
   } catch (err) {
     console.error('Failed to fetch users', err)
@@ -42,10 +42,10 @@ const sendMessage = async () => {
   sending.value = true
   try {
     if (broadcastMode.value) {
-      const res = await axios.post(`${API_BASE}/broadcast`, { text: messageText.value })
+      const res = await adminHttp.post(`${API_BASE}/broadcast`, { text: messageText.value })
       alert(`Отправлено: ${res.data.sent}, ошибок: ${res.data.failed}`)
     } else {
-      await axios.post(`${API_BASE}/users/${selectedUser.value.telegram_id}/message`, { text: messageText.value })
+      await adminHttp.post(`${API_BASE}/users/${selectedUser.value.telegram_id}/message`, { text: messageText.value })
       alert('Сообщение отправлено!')
     }
     selectedUser.value = null

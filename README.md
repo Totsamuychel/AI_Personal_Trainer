@@ -150,15 +150,21 @@ The system uses **Linear Periodization**. It tracks your performance across week
    docker exec -it ollama ollama pull llama3.1:8b
    docker exec -it ollama ollama pull nomic-embed-text
 
-   # Run DB migrations and seed RAG
+   # Run DB migrations and seed RAG (exercise JSON → Chroma; add `--all` to index PDFs from data/books)
    docker-compose run --rm api alembic upgrade head
-   docker-compose run --rm api python scripts/init_knowledge_base.py
+   docker-compose run --rm api python ai_trainer/rag/build_index.py --exercises
    ```
 
 5. **Start the Application**:
    ```bash
    docker-compose up -d
    ```
+
+### Admin API & Docker
+
+- Set `ADMIN_API_KEY` in `.env` to require authentication on every `/admin/*` route. Clients must send `X-Admin-API-Key: <same value>` or `Authorization: Bearer <same value>`. If `ADMIN_API_KEY` is empty, admin routes stay open (local development only).
+- Docker Compose: `api` and `bot` load `.env` via `env_file`. The `bot` service sets `OLLAMA_BASE_URL=http://ollama:11434` so Chroma embeddings and Ollama calls use the in-stack hostname instead of `localhost`.
+- Docker Compose: `frontend` passes `ADMIN_API_KEY` into nginx, which adds `X-Admin-API-Key` when proxying `/admin` to the API (the browser bundle never contains the key). For `npm run dev`, use `admin_frontend/.env.example` (`VITE_ADMIN_API_KEY`) or the in-app “Ключ админ-API” field (sessionStorage).
 
 ---
 
