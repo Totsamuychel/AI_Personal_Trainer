@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { Save, Server, Key, Cpu } from 'lucide-vue-next'
 
-const API_BASE = 'http://localhost:8000/admin'
+const API_BASE = '/admin'
 const settings = ref<any>({})
 const loading = ref(true)
 const saving = ref(false)

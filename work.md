@@ -71,7 +71,27 @@ _Обновлено: 2026-05-13_
 - [x] `GET /api/users/{telegram_id}` — профиль
 - [x] `GET /api/users/{telegram_id}/workouts` — история тренировок
 - [x] `GET /api/users/{telegram_id}/plan` — текущий план
-- [x] Admin: список пользователей, отправка сообщений, настройки LLM, статистика
+- [x] `GET /admin/users` — список пользователей (полная сериализация)
+- [x] `POST /admin/users/{telegram_id}/message` — отправка сообщения пользователю
+- [x] `POST /admin/broadcast` — рассылка всем пользователям
+- [x] `GET/PUT /admin/settings` — настройки LLM
+- [x] `GET /admin/users/{id}/stats` — объём тренировок
+- [x] `GET /admin/users/{id}/records` — личные рекорды
+- [x] `GET /admin/users/{id}/workouts` — история тренировок с упражнениями
+- [x] `GET /admin/users/{id}/nutrition` — дневник питания
+
+### Admin Frontend (Vue 3 + Vite + Tailwind)
+- [x] Таблица пользователей с кнопками (статистика, написать)
+- [x] Рассылка broadcast всем пользователям
+- [x] `UserStats` — 4 вкладки: Объём, Рекорды, Тренировки, Питание
+- [x] Графики (Chart.js): тренировочный объём, калории/белок
+- [x] Таблица личных рекордов (1RM) с датой
+- [x] История тренировок с раскрытием упражнений
+- [x] Дневник питания (КБЖУ)
+- [x] Настройки LLM (Ollama / OpenAI)
+- [x] Vite proxy для dev-режима
+- [x] nginx.conf + Dockerfile для production
+- [x] Сервис `frontend` в docker-compose (порт 3000)
 
 ### Инфраструктура
 - [x] `Dockerfile`: non-root user (`appuser`), `PYTHONDONTWRITEBYTECODE`, `PYTHONPATH=/app`, правильный `CMD`
@@ -97,7 +117,7 @@ _Нет открытых средних багов._
 
 ### ❌ Отсутствует полностью
 
-- **Admin frontend** — папка `admin_frontend/` создана, но пустая. React/Vue панель не написана.
+- **Admin frontend** — ✅ реализован (Vue 3 + Vite + Tailwind, собирается).
 - **Тесты** — покрытие минимальное: 3 теста (`test_create_user`, `test_create_workout`, `test_1rm_calculation`). Нет тестов для handlers, agent, RAG, sheets, scheduler.
 - **API аутентификация** — FastAPI endpoints открыты без JWT/API key.
 - **QLoRA fine-tuning** — упомянут в документации, pipeline не создан.

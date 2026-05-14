@@ -74,6 +74,16 @@ services:
       timeout: 10s
       retries: 5
 
+  frontend:
+    build:
+      context: ./admin_frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_started
+
 volumes:
   postgres_data:
   ollama_data:
