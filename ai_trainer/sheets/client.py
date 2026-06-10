@@ -1,4 +1,5 @@
 import os
+import asyncio
 import gspread
 from google.oauth2.service_account import Credentials
 from loguru import logger
@@ -93,6 +94,11 @@ class SheetsClient:
 
     async def log_workout(self, user_name: str, session_data: dict):
         """Records a workout and calculates progress vs previous entries."""
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._log_workout_sync, user_name, session_data)
+
+    def _log_workout_sync(self, user_name: str, session_data: dict):
+        """Blocking gspread implementation; runs in a thread pool to avoid stalling the event loop."""
         try:
             ss = self.get_spreadsheet()
             if not ss: return
@@ -140,6 +146,11 @@ class SheetsClient:
 
     async def log_nutrition(self, user_name: str, meal_data: dict):
         """Records nutrition on the '🥗 Nutrition' sheet."""
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._log_nutrition_sync, user_name, meal_data)
+
+    def _log_nutrition_sync(self, user_name: str, meal_data: dict):
+        """Blocking gspread implementation; runs in a thread pool to avoid stalling the event loop."""
         try:
             ss = self.get_spreadsheet()
             if not ss: return
@@ -162,6 +173,11 @@ class SheetsClient:
 
     async def update_monthly_plan(self, month_name: str, plan_summary: dict):
         """Updates the monthly overview."""
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._update_monthly_plan_sync, month_name, plan_summary)
+
+    def _update_monthly_plan_sync(self, month_name: str, plan_summary: dict):
+        """Blocking gspread implementation; runs in a thread pool to avoid stalling the event loop."""
         try:
             ss = self.get_spreadsheet()
             if not ss: return
@@ -173,6 +189,11 @@ class SheetsClient:
 
     async def update_weekly_plan(self, week_data: dict):
         """Syncs the current weekly plan to the spreadsheet."""
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._update_weekly_plan_sync, week_data)
+
+    def _update_weekly_plan_sync(self, week_data: dict):
+        """Blocking gspread implementation; runs in a thread pool to avoid stalling the event loop."""
         try:
             ss = self.get_spreadsheet()
             if not ss: return

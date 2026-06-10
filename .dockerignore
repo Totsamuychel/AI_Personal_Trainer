@@ -1,0 +1,40 @@
+# Secrets & local config
+.env
+.env.*
+credentials.json
+*.json.key
+ai-trainer-*.json
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# RAG / vector stores (rebuilt in-container)
+chroma_fitness_db/
+memory_db/
+ai_trainer/rag/data/chroma_db/
+ai_trainer/rag/data/books/**/*.pdf
+ai_trainer/rag/data/books/**/*.epub
+
+# Frontend (built separately by its own Dockerfile)
+admin_frontend/node_modules/
+admin_frontend/dist/
+
+# Tooling / VCS
+.git/
+.gitignore
+.idea/
+.vscode/
+*.log

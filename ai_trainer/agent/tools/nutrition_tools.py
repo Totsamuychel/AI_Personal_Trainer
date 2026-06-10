@@ -22,8 +22,7 @@ async def calculate_macros_from_text(description: str) -> str:
         "Обязательно верни ответ ТОЛЬКО в формате валидного JSON без лишнего текста.\n"
         "Формат: {{\"calories\": float, \"protein\": float, \"carbs\": float, \"fat\": float, \"meal_name\": \"название блюда\"}}"
     )
-    chain = prompt | llm
-    
+
     try:
         response = await llm.ainvoke(prompt.format(description=description))
         content = response.content if hasattr(response, 'content') else str(response)

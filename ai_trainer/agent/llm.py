@@ -1,5 +1,6 @@
 import os
 import asyncio
+import hashlib
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
 from ai_trainer.db import database
@@ -43,8 +44,12 @@ async def get_llm():
                         model = settings.ollama_model
                         base_url = settings.ollama_base_url
 
-                # Check if settings changed to recreate LLM
-                settings_str = f"{provider}:{model}:{base_url if provider == 'ollama' else ''}"
+                # Check if settings changed to recreate LLM.
+                # Hash the api_key (don't store it raw) so rotating the OpenAI key
+                # invalidates the cached singleton instead of reusing the stale client.
+                effective_key = api_key or os.getenv("OPENAI_API_KEY") or ""
+                key_fingerprint = hashlib.sha256(effective_key.encode()).hexdigest()[:12] if provider == "openai" else ""
+                settings_str = f"{provider}:{model}:{base_url if provider == 'ollama' else ''}:{key_fingerprint}"
                 if _llm is not None and _last_settings == settings_str:
                     return _llm
                 

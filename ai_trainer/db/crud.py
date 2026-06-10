@@ -117,6 +117,7 @@ async def get_workout_history(db: AsyncSession, user_id: int, limit: int = 10) -
     logger.debug(f"Fetching workout history for user_id {user_id}, limit {limit}")
     result = await db.execute(
         select(models.WorkoutSession)
+        .options(selectinload(models.WorkoutSession.exercises))
         .filter(models.WorkoutSession.user_id == user_id)
         .order_by(models.WorkoutSession.date.desc())
         .limit(limit)

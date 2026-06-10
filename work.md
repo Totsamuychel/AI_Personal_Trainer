@@ -1,5 +1,5 @@
 # AI Personal Trainer — Статус проекта
-_Обновлено: 2026-05-14_
+_Обновлено: 2026-06-11_
 
 ---
 
@@ -101,7 +101,7 @@ _Обновлено: 2026-05-14_
 
 ---
 
-## Баги — требуют исправления
+## Баги
 
 ### 🔴 Критические
 
@@ -110,6 +110,15 @@ _Нет открытых критических багов._
 ### 🟡 Средние
 
 _Нет открытых средних багов._
+
+### ✅ Исправлено (2026-06-11)
+
+- [x] `get_workout_history` не делал eager-load `exercises` → `MissingGreenlet` при доступе из `get_workout_history_tool`. Добавлен `selectinload`.
+- [x] `llm.py`: смена OpenAI API-ключа не пересоздавала singleton (ключ не входил в cache-key). Добавлен sha256-fingerprint ключа в `settings_str`.
+- [x] `sheets/client.py`: блокирующие вызовы gspread в `async`-методах стопорили event loop. Тела вынесены в `_*_sync` и вызываются через `run_in_executor`.
+- [x] `bot/handlers/agent.py`: ответ агента отправлялся без нормализации (`content` мог быть list), без проверки на пустоту и без разбивки на куски >4096 символов. Добавлены `_normalize_content` и `_send_chunked`.
+- [x] `nutrition_tools.py`: удалён мёртвый `chain = prompt | llm`.
+- [x] Добавлен `.dockerignore` — `credentials.json`, `.env`, `*.db` больше не попадают в образ.
 
 ---
 
