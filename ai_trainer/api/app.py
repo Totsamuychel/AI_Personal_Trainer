@@ -77,9 +77,27 @@ async def get_user_workouts(telegram_id: str, limit: int = 10, db: AsyncSession 
     user = await crud.get_user_by_telegram_id(db, telegram_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-        
+
     workouts = await crud.get_workout_history(db, user.id, limit)
-    return workouts
+    return [
+        {
+            "id": w.id,
+            "date": w.date.isoformat() if w.date else None,
+            "workout_type": w.workout_type,
+            "duration_min": w.duration_min,
+            "notes": w.notes,
+            "exercises": [
+                {
+                    "name": e.name,
+                    "sets": e.sets,
+                    "reps": e.reps,
+                    "weight_kg": e.weight_kg,
+                }
+                for e in w.exercises
+            ],
+        }
+        for w in workouts
+    ]
 
 @app.get("/api/users/{telegram_id}/plan")
 async def get_user_plan(telegram_id: str, db: AsyncSession = Depends(get_db)):

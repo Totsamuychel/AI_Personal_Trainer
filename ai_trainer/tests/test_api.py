@@ -111,7 +111,13 @@ async def test_get_nonexistent_user_returns_404(api_client):
 async def test_get_user_workouts(api_client, seeded_user):
     resp = await api_client.get(f"/api/users/{seeded_user.telegram_id}/workouts")
     assert resp.status_code == 200
-    assert isinstance(resp.json(), list)
+    workouts = resp.json()
+    assert isinstance(workouts, list)
+    assert len(workouts) >= 1
+    w = workouts[0]
+    assert w["workout_type"] == "Push"
+    assert w["exercises"][0]["name"] == "Bench Press"
+    assert w["exercises"][0]["reps"] == [8, 8, 7]
 
 
 @pytest.mark.anyio
