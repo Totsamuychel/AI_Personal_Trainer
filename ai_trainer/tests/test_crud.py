@@ -36,6 +36,20 @@ async def test_create_user(db_session):
 
 
 @pytest.mark.anyio
+async def test_upsert_accepts_raw_string_goal(db_session):
+    """Registration passes goal as a raw string (e.g. 'fat_loss'); it must
+    round-trip to the GoalType enum. Guards the name==value assumption."""
+    await crud.upsert_user(db_session, {
+        "telegram_id": "11112",
+        "name": "Stringy",
+        "goal": "fat_loss",
+    })
+    fetched = await crud.get_user_by_telegram_id(db_session, "11112")
+    assert fetched.goal == models.GoalType.fat_loss
+    assert fetched.goal.value == "fat_loss"
+
+
+@pytest.mark.anyio
 async def test_upsert_updates_existing_user(db_session):
     await crud.upsert_user(db_session, {"telegram_id": "22222", "name": "Bob", "age": 20})
     updated = await crud.upsert_user(db_session, {"telegram_id": "22222", "name": "Bobby", "age": 21})
