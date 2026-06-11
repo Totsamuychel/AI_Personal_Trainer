@@ -121,9 +121,12 @@ async def generate_weekly_plan_tool(telegram_id: str, split_type: str = "PPL") -
             plan_data = {"week_number": next_week_num, "week_type": week_info["week_type"], "week_name": week_info["name"], "days": days}
             
             now = datetime.now(timezone.utc)
-            new_plan = models.WeeklyPlan(user_id=user.id, week_number=next_week_num, week_type=week_info["week_type"], 
+            new_plan = models.WeeklyPlan(user_id=user.id, week_number=next_week_num, week_type=week_info["week_type"],
                                          start_date=now + timedelta(days=(7-now.weekday())), plan_data=plan_data, is_active=1)
             db.add(new_plan)
+            # Flush so new_plan.id is assigned; otherwise `id != None` renders as
+            # `id IS NOT NULL` and the UPDATE deactivates the brand-new plan too.
+            await db.flush()
             await db.execute(sa_update(models.WeeklyPlan).filter(models.WeeklyPlan.user_id == user.id, models.WeeklyPlan.id != new_plan.id).values(is_active=0))
             await db.commit()
             

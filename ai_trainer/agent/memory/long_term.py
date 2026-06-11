@@ -22,7 +22,7 @@ class UserMemoryStore:
         user_dir = MEMORY_DIR / self.user_id
         
         self.embeddings = OllamaEmbeddings(
-            model=os.getenv("EMBEDDING_MODEL", "mxbai-embed-large"),
+            model=os.getenv("EMBEDDING_MODEL", "nomic-embed-text"),
             base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         )
         

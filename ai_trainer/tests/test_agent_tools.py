@@ -1,12 +1,14 @@
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
+from sqlalchemy import select
 
 from ai_trainer.agent import trainer_agent
 from ai_trainer.agent.tools.workout_tools import (
     log_workout_session_tool,
     get_workout_history_tool,
 )
-from ai_trainer.db import crud
+from ai_trainer.agent.tools.plan_tools import generate_weekly_plan_tool
+from ai_trainer.db import crud, models
 
 
 # ─── _detect_topic (pure) ─────────────────────────────────────────────────────
@@ -76,3 +78,28 @@ async def test_get_workout_history_tool_loads_exercises(db_session):
 async def test_get_workout_history_tool_user_not_found():
     result = await get_workout_history_tool.ainvoke({"telegram_id": "no-such-user"})
     assert "not found" in result.lower()
+
+
+# ─── plan tool ────────────────────────────────────────────────────────────────
+
+@pytest.mark.anyio
+async def test_generate_plan_keeps_single_active_plan(db_session):
+    """Regression: deactivation filter must exclude the freshly created plan,
+    otherwise generating a plan leaves the user with zero active plans."""
+    user = await crud.upsert_user(db_session, {"telegram_id": "70010", "name": "Nina"})
+
+    await generate_weekly_plan_tool.ainvoke({"telegram_id": "70010", "split_type": "PPL"})
+    await generate_weekly_plan_tool.ainvoke({"telegram_id": "70010", "split_type": "PPL"})
+
+    # Exactly one active plan, and it is the latest week.
+    active = await crud.get_active_weekly_plan(db_session, user.id)
+    assert active is not None
+    assert active.week_number == 2
+
+    result = await db_session.execute(
+        select(models.WeeklyPlan).where(
+            models.WeeklyPlan.user_id == user.id,
+            models.WeeklyPlan.is_active == 1,
+        )
+    )
+    assert len(result.scalars().all()) == 1

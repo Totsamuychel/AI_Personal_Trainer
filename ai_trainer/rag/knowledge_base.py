@@ -19,9 +19,12 @@ CHROMA_DIR = Path(__file__).parent / "data" / "chroma_db"
 
 class FitnessKnowledgeBase:
     def __init__(self, persist_dir: Optional[str] = None):
-        # Используем mxbai-embed-large как более современную альтернативу
+        # Дефолт совпадает с .env.example / SystemSettings / setup-инструкциями
+        # (docker pull nomic-embed-text). Индексация и поиск используют один
+        # дефолт — модель эмбеддингов должна совпадать, иначе размерность
+        # векторов не сойдётся с существующим индексом.
         self.embeddings = OllamaEmbeddings(
-            model=os.getenv("EMBEDDING_MODEL", "mxbai-embed-large"),
+            model=os.getenv("EMBEDDING_MODEL", "nomic-embed-text"),
             base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         )
         self.vectorstore = Chroma(
