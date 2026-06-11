@@ -119,17 +119,21 @@ _Нет открытых средних багов._
 - [x] `bot/handlers/agent.py`: ответ агента отправлялся без нормализации (`content` мог быть list), без проверки на пустоту и без разбивки на куски >4096 символов. Добавлены `_normalize_content` и `_send_chunked`.
 - [x] `nutrition_tools.py`: удалён мёртвый `chain = prompt | llm`.
 - [x] Добавлен `.dockerignore` — `credentials.json`, `.env`, `*.db` больше не попадают в образ.
+- [x] `plan_tools.generate_weekly_plan_tool`: `new_plan.id` был `None` на момент построения фильтра, `id != None` рендерился как `IS NOT NULL` и деактивировал в т.ч. только что созданный план → у пользователя не оставалось активного плана. Добавлен `flush()` перед UPDATE. Покрыто тестом.
+- [x] `knowledge_base.py` / `long_term.py`: дефолт `EMBEDDING_MODEL` был `mxbai-embed-large`, который не скачивается в setup (везде иначе `nomic-embed-text`) → эмбеддинги падали при незаданной env, ломая RAG и весь чат агента. Выровнено на `nomic-embed-text`.
+- [x] `scheduler/tips_scheduler.py`: `initial_state` использовал несуществующие ключи и список строк вместо `HumanMessage` → утренние советы не работали. Исправлено.
+- [x] `api/app.py`: `GET /api/users/{id}/workouts` возвращал сырые ORM-объекты → теперь явная сериализация с упражнениями.
 
 ---
 
 ### Тесты
-- [x] `test_crud.py` — 17 тестов: 1RM формула (3), User CRUD (4), Workout (4), Personal Records (2), Nutrition (1), SystemSettings (2), Volume history (1)
+- [x] `test_crud.py` — 18 тестов: 1RM формула (3), User CRUD (5, вкл. raw-string goal), Workout (4), Personal Records (2), Nutrition (1), SystemSettings (2), Volume history (1)
 - [x] `test_api.py` — 11 тестов: root, health, публичные user-эндпоинты (4), admin-эндпоинты (4), проверка auth (1)
 - [x] `test_bot_utils.py` — 11 тестов: нормализация content, разбивка >4096, fallback Markdown→plain
-- [x] `test_agent_tools.py` — 8 тестов: `_detect_topic`, `should_continue`, workout-инструменты (включая регрессию eager-load)
+- [x] `test_agent_tools.py` — 9 тестов: `_detect_topic`, `should_continue`, workout-инструменты (регрессия eager-load), plan-инструмент (регрессия single-active-plan)
 - [x] `test_scheduler.py` — 1 тест: фильтр получателей утренних советов
 - [x] `test_llm_retry.py` — 3 теста: retry/backoff (успех после сбоев, проброс финальной ошибки)
-- [x] Все 50 тестов проходят на SQLite in-memory без PostgreSQL
+- [x] Все 52 теста проходят на SQLite in-memory без PostgreSQL
 
 ### CI / устойчивость / hardening (2026-06-11)
 - [x] `.github/workflows/ci.yml` — pytest на push/PR в main (Python 3.11)
