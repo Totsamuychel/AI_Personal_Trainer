@@ -1,14 +1,26 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from typing import List, Dict, Any
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from ai_trainer.db import crud, database
 from ai_trainer.api.routes import admin
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    # Release the shared Telegram Bot session on shutdown.
+    await admin.close_bot()
+
+
 app = FastAPI(
     title="AI Personal Trainer API",
     description="REST API for the AI Personal Trainer application",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS Middleware
@@ -31,6 +43,20 @@ async def get_db():
 @app.get("/")
 async def root():
     return {"message": "Welcome to AI Personal Trainer API"}
+
+
+@app.get("/health")
+async def health(db: AsyncSession = Depends(get_db)):
+    """Liveness + DB connectivity probe for orchestrators."""
+    try:
+        await db.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        db_ok = False
+    return JSONResponse(
+        status_code=status.HTTP_200_OK if db_ok else status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"status": "ok" if db_ok else "degraded", "database": db_ok},
+    )
 
 @app.get("/api/users/{telegram_id}")
 async def get_user(telegram_id: str, db: AsyncSession = Depends(get_db)):

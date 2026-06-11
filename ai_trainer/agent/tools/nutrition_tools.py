@@ -1,5 +1,5 @@
 from langchain.tools import tool
-from ai_trainer.agent.llm import get_llm
+from ai_trainer.agent.llm import get_llm, ainvoke_with_retry
 from ai_trainer.db import crud, database
 from ai_trainer.sheets.client import SheetsClient
 from langchain_core.prompts import PromptTemplate
@@ -24,7 +24,7 @@ async def calculate_macros_from_text(description: str) -> str:
     )
 
     try:
-        response = await llm.ainvoke(prompt.format(description=description))
+        response = await ainvoke_with_retry(llm, prompt.format(description=description))
         content = response.content if hasattr(response, 'content') else str(response)
         
         # Clean up the response to extract JSON

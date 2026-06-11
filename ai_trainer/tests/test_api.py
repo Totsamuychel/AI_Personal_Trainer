@@ -81,6 +81,15 @@ async def test_root_returns_200(api_client):
     assert "message" in resp.json()
 
 
+@pytest.mark.anyio
+async def test_health_reports_db_ok(api_client):
+    resp = await api_client.get("/health")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert data["database"] is True
+
+
 # ─── Public user endpoints ────────────────────────────────────────────────────
 
 @pytest.mark.anyio

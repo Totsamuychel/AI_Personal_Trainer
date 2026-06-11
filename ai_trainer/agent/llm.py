@@ -3,12 +3,43 @@ import asyncio
 import hashlib
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
+from loguru import logger
 from ai_trainer.db import database
 
 # Singletons
 _llm = None
 _last_settings = None
 _llm_lock = asyncio.Lock()
+
+# Retry config for transient LLM/provider failures
+LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "2"))
+LLM_RETRY_BASE_DELAY = float(os.getenv("LLM_RETRY_BASE_DELAY", "1.0"))
+
+
+async def ainvoke_with_retry(model, messages, max_retries: int = LLM_MAX_RETRIES,
+                             base_delay: float = LLM_RETRY_BASE_DELAY):
+    """Invoke an LLM with exponential backoff on transient failures.
+
+    Retries up to ``max_retries`` times (so ``max_retries + 1`` attempts total),
+    sleeping ``base_delay * 2**attempt`` seconds between tries. The final failure
+    is re-raised so callers can surface a graceful error to the user.
+    """
+    last_exc = None
+    for attempt in range(max_retries + 1):
+        try:
+            return await model.ainvoke(messages)
+        except Exception as e:
+            last_exc = e
+            if attempt < max_retries:
+                delay = base_delay * (2 ** attempt)
+                logger.warning(
+                    f"LLM invocation failed (attempt {attempt + 1}/{max_retries + 1}): {e}. "
+                    f"Retrying in {delay:.1f}s..."
+                )
+                await asyncio.sleep(delay)
+            else:
+                logger.error(f"LLM invocation failed after {max_retries + 1} attempts: {e}")
+    raise last_exc
 
 async def get_llm():
     """Retrieve the LLM based on database configuration (Singleton)."""

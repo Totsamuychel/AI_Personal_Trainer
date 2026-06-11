@@ -16,6 +16,28 @@ router = APIRouter(
     dependencies=[Depends(verify_admin_api_key)],
 )
 
+# Reused Bot instance: a new Bot() opens a fresh aiohttp session each time, so we
+# keep one for the app's lifetime and close it on shutdown (see app lifespan).
+_bot: Optional[Bot] = None
+
+
+def _get_bot() -> Bot:
+    global _bot
+    token = os.getenv("TELEGRAM_TOKEN")
+    if not token:
+        raise HTTPException(status_code=500, detail="TELEGRAM_TOKEN not configured")
+    if _bot is None:
+        _bot = Bot(token=token)
+    return _bot
+
+
+async def close_bot() -> None:
+    """Close the shared Bot's session; call on application shutdown."""
+    global _bot
+    if _bot is not None:
+        await _bot.session.close()
+        _bot = None
+
 
 async def get_db():
     async with database.db_session() as session:
@@ -83,35 +105,24 @@ async def get_admin_users(db: AsyncSession = Depends(get_db)):
 
 @router.post("/users/{telegram_id}/message")
 async def send_user_message(telegram_id: str, request: MessageRequest):
-    token = os.getenv("TELEGRAM_TOKEN")
-    if not token:
-        raise HTTPException(status_code=500, detail="TELEGRAM_TOKEN not configured")
-    bot = Bot(token=token)
+    bot = _get_bot()
     try:
         await bot.send_message(chat_id=telegram_id, text=request.text)
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send message: {str(e)}")
-    finally:
-        await bot.session.close()
 
 @router.post("/broadcast")
 async def broadcast_message(request: MessageRequest, db: AsyncSession = Depends(get_db)):
-    token = os.getenv("TELEGRAM_TOKEN")
-    if not token:
-        raise HTTPException(status_code=500, detail="TELEGRAM_TOKEN not configured")
+    bot = _get_bot()
     users = await crud.get_all_users(db)
-    bot = Bot(token=token)
     sent, failed = 0, 0
-    try:
-        for user in users:
-            try:
-                await bot.send_message(chat_id=user.telegram_id, text=request.text)
-                sent += 1
-            except Exception:
-                failed += 1
-    finally:
-        await bot.session.close()
+    for user in users:
+        try:
+            await bot.send_message(chat_id=user.telegram_id, text=request.text)
+            sent += 1
+        except Exception:
+            failed += 1
     return {"sent": sent, "failed": failed}
 
 @router.get("/settings")

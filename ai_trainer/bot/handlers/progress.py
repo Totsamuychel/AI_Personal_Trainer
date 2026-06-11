@@ -21,6 +21,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import BufferedInputFile
 from ai_trainer.db import crud, database
+from ai_trainer.bot.utils import send_long_message
 from loguru import logger
 
 
@@ -440,4 +441,4 @@ async def show_records(callback: types.CallbackQuery, state: FSMContext):
                 f"  📅 Date: {date_str}\n\n"
             )
 
-    await callback.message.answer(text, parse_mode="Markdown")
+    await send_long_message(callback.message, text, parse_mode="Markdown")

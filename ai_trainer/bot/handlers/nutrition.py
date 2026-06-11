@@ -3,6 +3,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from loguru import logger
 from ai_trainer.db import crud, database
+from ai_trainer.bot.utils import normalize_content, send_long_message
 from datetime import datetime
 
 router = Router()
@@ -62,7 +63,11 @@ async def process_meal_description(message: types.Message, state: FSMContext):
         
         if result and "messages" in result and result["messages"]:
             response = result["messages"][-1]
-            await message.answer(response.content)
+            text = normalize_content(getattr(response, "content", "")).strip()
+            if text:
+                await send_long_message(message, text)
+            else:
+                await message.answer("Извини, не смог посчитать КБЖУ.")
         else:
             await message.answer("Извини, не смог посчитать КБЖУ.")
             

@@ -124,8 +124,20 @@ _Нет открытых средних багов._
 
 ### Тесты
 - [x] `test_crud.py` — 17 тестов: 1RM формула (3), User CRUD (4), Workout (4), Personal Records (2), Nutrition (1), SystemSettings (2), Volume history (1)
-- [x] `test_api.py` — 10 тестов: root, публичные user-эндпоинты (4), admin-эндпоинты (4), проверка auth (1)
-- [x] Все 27 тестов проходят на SQLite in-memory без PostgreSQL
+- [x] `test_api.py` — 11 тестов: root, health, публичные user-эндпоинты (4), admin-эндпоинты (4), проверка auth (1)
+- [x] `test_bot_utils.py` — 11 тестов: нормализация content, разбивка >4096, fallback Markdown→plain
+- [x] `test_agent_tools.py` — 8 тестов: `_detect_topic`, `should_continue`, workout-инструменты (включая регрессию eager-load)
+- [x] `test_scheduler.py` — 1 тест: фильтр получателей утренних советов
+- [x] `test_llm_retry.py` — 3 теста: retry/backoff (успех после сбоев, проброс финальной ошибки)
+- [x] Все 50 тестов проходят на SQLite in-memory без PostgreSQL
+
+### CI / устойчивость / hardening (2026-06-11)
+- [x] `.github/workflows/ci.yml` — pytest на push/PR в main (Python 3.11)
+- [x] Единая отправка длинных сообщений: `ai_trainer/bot/utils.py` (`normalize_content`, `send_long_message`) применена в agent/tips/plan/progress/nutrition
+- [x] Планировщик: исправлен `initial_state` (HumanMessage + ключи AgentState), нормализация ответа
+- [x] LLM retry/backoff: `ainvoke_with_retry` в `llm.py`, подключён в агенте и nutrition-инструменте
+- [x] Admin API переиспользует один `Bot` (закрытие сессии через lifespan), эндпоинт `/health` с проверкой БД, healthcheck для `api` в docker-compose
+- [x] `aiosqlite`/`anyio` добавлены в `requirements.txt` (нужны тестам)
 
 ### Seed-данные
 - [x] `scripts/seed_test_db.py` — реалистичный тестовый пользователь: 10 тренировок за 28 дней, 10 записей питания, личные рекорды, план на неделю

@@ -1,8 +1,10 @@
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiogram import Bot
+from langchain_core.messages import HumanMessage
 from loguru import logger
 from ai_trainer.agent.trainer_agent import build_trainer_graph
+from ai_trainer.bot.utils import normalize_content
 from ai_trainer.db import database, crud
 from datetime import datetime
 
@@ -26,12 +28,13 @@ async def send_morning_tip(bot: Bot):
                     logger.info(f"Sending morning tip to user {user.telegram_id}")
                     # Request a morning tip from the agent
                     initial_state = {
-                        "messages": ["Дай мне короткий совет на сегодня, основываясь на моем профиле и прогрессе."],
+                        "messages": [HumanMessage(content="Дай мне короткий совет на сегодня, основываясь на моем профиле и прогрессе.")],
                         "user_id": str(user.telegram_id),
-                        "profile": {},
-                        "workout_history": [],
+                        "user_profile": {},
                         "personal_records": [],
+                        "recent_workouts": [],
                         "retrieved_context": "",
+                        "user_memories": [],
                         "current_plan": {},
                         "action_type": "tip"
                     }
@@ -39,8 +42,9 @@ async def send_morning_tip(bot: Bot):
                     result = await app.ainvoke(initial_state)
 
                     if result and "messages" in result and result["messages"]:
-                        tip = result["messages"][-1].content
-                        await bot.send_message(user.telegram_id, f"☀️ Доброе утро, {user.name}!\n\n{tip}")
+                        tip = normalize_content(getattr(result["messages"][-1], "content", "")).strip()
+                        if tip:
+                            await bot.send_message(user.telegram_id, f"☀️ Доброе утро, {user.name}!\n\n{tip}")
                 except Exception as e:
                     logger.error(f"Failed to send tip to user {user.telegram_id}: {e}")
 

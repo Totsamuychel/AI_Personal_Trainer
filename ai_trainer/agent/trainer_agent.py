@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from ai_trainer.db import crud, database, models
 from ai_trainer.rag.knowledge_base import FitnessKnowledgeBase
-from ai_trainer.agent.llm import get_llm
+from ai_trainer.agent.llm import get_llm, ainvoke_with_retry
 from ai_trainer.agent.memory.long_term import UserMemoryStore
 
 # Import tools
@@ -239,7 +239,7 @@ async def run_agent_node(state: AgentState):
 
         messages = [SystemMessage(content=system_prompt)] + state['messages']
         logger.info("Invoking LLM...")
-        response = await llm.ainvoke(messages)
+        response = await ainvoke_with_retry(llm, messages)
         logger.info("LLM response received")
         return {"messages": [response]}
     except Exception as e:

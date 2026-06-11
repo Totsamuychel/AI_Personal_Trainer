@@ -2,6 +2,7 @@ from aiogram import Router, types, F
 from aiogram.filters import CommandObject, Command
 from loguru import logger
 from ai_trainer.rag.knowledge_base import FitnessKnowledgeBase
+from ai_trainer.bot.utils import send_long_message
 
 router = Router()
 kb = FitnessKnowledgeBase()
@@ -36,8 +37,8 @@ async def cmd_tip(message: types.Message, command: CommandObject):
                 content = content[:500] + "..."
             text += f"{content}\n\n"
             
-        await message.answer(text, parse_mode="Markdown")
-        
+        await send_long_message(message, text, parse_mode="Markdown")
+
     except Exception as e:
         logger.error(f"Error searching tips: {e}")
         await message.answer("Произошла ошибка при поиске информации.")

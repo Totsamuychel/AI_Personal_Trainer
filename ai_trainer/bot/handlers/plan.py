@@ -1,6 +1,7 @@
 from aiogram import Router, types, F
 from loguru import logger
 from ai_trainer.db import crud, database
+from ai_trainer.bot.utils import send_long_message
 import json
 
 router = Router()
@@ -34,7 +35,7 @@ async def cmd_plan(message: types.Message):
                 text += f"  • {ex.get('name')}: {ex.get('sets')}x{ex.get('reps')} ({ex.get('target_rpe', 'RPE 7-8')})\n"
             text += "\n"
             
-        await message.answer(text, parse_mode="Markdown")
+        await send_long_message(message, text, parse_mode="Markdown")
     except Exception as e:
         logger.error(f"Error parsing plan: {e}")
         await message.answer("Произошла ошибка при отображении плана.")
